@@ -57,12 +57,20 @@
         <div id="lastActionStatus" class="last-action status-default"><span data-i18n="dashboard.recentActivityLoading">Loading recent activity...</span></div>
       </div>
 
+      <!-- Dispenser Status -->
+      <div class="card">
+        <h2 class="card-title"><span data-i18n="dashboard.dispenserStatusTitle">Dispenser Status</span></h2>
+        <div id="dispenserStatus">
+          <div class="dispenser-status-loading"><span data-i18n="dashboard.dispenserStatusLoading">Loading dispenser status...</span></div>
+        </div>
+      </div>
+
       <!-- Upcoming Schedules -->
       <div class="card">
-        <h2 class="card-title">Upcoming Schedules</h2>
+        <h2 class="card-title"><span data-i18n="dashboard.upcomingSchedulesTitle">Upcoming Schedules</span></h2>
         <div id="upcomingSchedules">
-          <div class="empty-list">No upcoming schedules found.</div>
-        </div>
+            <div class="empty-list"><span data-i18n="dashboard.upcomingSchedulesEmpty">No upcoming schedules found.</span></div>
+          </div>
       </div>
 
       <!-- System Logs -->
@@ -70,7 +78,7 @@
         <div class="logs-container">
           <div class="logs-header">
             <h3 class="logs-title"><span data-i18n="dashboard.systemLogsTitle">System Logs</span></h3>
-            <a href="/history.html" target="_blank" class="view-history-link">📋 View Full History</a>
+            <a href="/history.html" target="_blank" class="view-history-link"><span data-i18n="dashboard.viewFullHistory">📋 View Full History</span></a>
           </div>
           <pre id="logs"><span data-i18n="dashboard.systemLogsLoading">Loading system logs...</span></pre>
         </div>
@@ -129,14 +137,14 @@
         <div class="form-section">
             <div class="form-group">
                 <label class="form-label"><span data-i18n="medicine.addNewDrum1">Add New Medicines to Drum 1</span></label>
-                <p id="drum1Capacity" style="color: #666; font-size: 0.9rem; margin: 0 0 0.5rem 0;">(7 slots available)</p>
+                <p id="drum1Capacity" style="color: #666; font-size: 0.9rem; margin: 0 0 0.5rem 0;" data-i18n="medicine.slotsAvailable">(7 slots available)</p>
                 <input type="number" id="addMedCount1" class="form-control count-input" min="1" max="7" oninput="generateMedicineInputs(1, this.value)" placeholder="Number of new medicines to add" title="Enter how many new medicines to add to Drum 1" data-i18n-placeholder="medicine.addCountPlaceholder">
             </div>
             <div id="newMedicinesContainer1" class="form-grid" style="margin-top: 1rem;">
                 <!-- Dynamic input fields will be injected here -->
             </div>
             <button class="btn btn-success" onclick="saveMedicines(1)" style="width: 100%; margin-top: 1rem;">
-                💾 Save to Drum 1
+                <span data-i18n="medicine.saveToDrum1">💾 Save to Drum 1</span>
             </button>
         </div>
       </div>
@@ -154,14 +162,14 @@
         <div class="form-section">
             <div class="form-group">
                 <label class="form-label"><span data-i18n="medicine.addNewDrum2">Add New Medicines to Drum 2</span></label>
-                <p id="drum2Capacity" style="color: #666; font-size: 0.9rem; margin: 0 0 0.5rem 0;">(7 slots available)</p>
+                <p id="drum2Capacity" style="color: #666; font-size: 0.9rem; margin: 0 0 0.5rem 0;" data-i18n="medicine.slotsAvailable">(7 slots available)</p>
                 <input type="number" id="addMedCount2" class="form-control count-input" min="1" max="7" oninput="generateMedicineInputs(2, this.value)" placeholder="Number of new medicines to add" title="Enter how many new medicines to add to Drum 2" data-i18n-placeholder="medicine.addCountPlaceholder">
             </div>
             <div id="newMedicinesContainer2" class="form-grid" style="margin-top: 1rem;">
                 <!-- Dynamic input fields will be injected here -->
             </div>
             <button class="btn btn-success" onclick="saveMedicines(2)" style="width: 100%; margin-top: 1rem;">
-                💾 Save to Drum 2
+                <span data-i18n="medicine.saveToDrum2">💾 Save to Drum 2</span>
             </button>
         </div>
       </div>
@@ -172,6 +180,11 @@
       <div class="card">
         <h2 class="card-title"><span data-i18n="manual.title">Manual Dispense Control</span></h2>
         <p style="color: #666; margin-bottom: 1.5rem;"><span data-i18n="manual.explain">Manually dispense medications from either drum for testing or immediate needs.</span></p>
+        
+        <!-- Dispenser Status for Manual Tab -->
+            <div id="manualDispenserStatus" class="dispenser-status-loading">
+              <span data-i18n="dashboard.dispenserStatusLoading">Loading dispenser status...</span>
+            </div>
         
         <div class="form-section">
           <div class="btn-grid">
@@ -191,6 +204,14 @@
 
     <!-- Settings Tab -->
     <div id="settings" class="tab-content">
+      <!-- Dispenser Status for Schedule Tab -->
+          <div class="card">
+            <h2 class="card-title">📊 <span data-i18n="dashboard.dispenserStatusTitle">Dispenser Status</span></h2>
+            <div id="scheduleDispenserStatus" class="dispenser-status-loading">
+              <span data-i18n="dashboard.dispenserStatusLoading">Loading dispenser status...</span>
+            </div>
+          </div>
+
       <div class="card">
         <h2 class="card-title"><span data-i18n="settings.drum1.title">Drum 1 Schedule</span></h2>
         <div class="form-section">

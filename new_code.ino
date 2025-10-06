@@ -627,6 +627,39 @@ void initWebServer()
         serializeJson(doc, json);
         request->send(200, "application/json", json); });
 
+    server.on("/api/dispenser-status", HTTP_GET, [](AsyncWebServerRequest *request)
+              {
+        StaticJsonDocument<1024> doc;
+        JsonArray drums = doc.createNestedArray("drums");
+        
+        for (int drum = 1; drum <= 2; drum++) {
+            JsonObject drumObj = drums.createNestedObject();
+            drumObj["drum"] = drum;
+            drumObj["currentSlot"] = (drum == 1) ? currentSlotDrum1 : currentSlotDrum2;
+            drumObj["isEmpty"] = drumIsEffectivelyEmpty[drum - 1];
+            
+            JsonArray slots = drumObj.createNestedArray("slots");
+            int emptySlots = 0;
+            int totalSlots = 7;
+            
+            for (int slot = 1; slot <= 7; slot++) {
+                JsonObject slotObj = slots.createNestedObject();
+                slotObj["slot"] = slot;
+                String pillName = getPillName(drum, slot);
+                slotObj["medicine"] = pillName;
+                slotObj["isEmpty"] = (pillName == "Empty" || pillName == "Ready to insert");
+                if (slotObj["isEmpty"]) emptySlots++;
+            }
+            
+            drumObj["emptySlots"] = emptySlots;
+            drumObj["totalSlots"] = totalSlots;
+            drumObj["fillPercentage"] = ((totalSlots - emptySlots) * 100) / totalSlots;
+        }
+        
+        String json;
+        serializeJson(doc, json);
+        request->send(200, "application/json", json); });
+
     server.on("/addSlotMapEntry", HTTP_POST, [](AsyncWebServerRequest *request)
               {
         if (request->hasParam("data", true)) {
