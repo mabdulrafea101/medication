@@ -1,0 +1,11 @@
+# Ignore everything by default
+*
+
+# But keep this .gitignore file
+!/.gitignore
+
+# Keep the main sketch file
+!/new_code.ino
+
+# Keep the data directory and all of its contents
+!/data/
