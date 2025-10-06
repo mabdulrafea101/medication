@@ -25,6 +25,13 @@
 #include <freertos/semphr.h>
 #include <ArduinoJson.h>
 
+// Add these variables to the global variables section
+unsigned long lastEmptyCheckTime[2] = {0, 0};     // For Drum 1 and 2
+const unsigned long EMPTY_CHECK_INTERVAL = 60000; // Check every minute
+unsigned long emptyDisplayUntil[2] = {0, 0};      // Timeout for empty drum display (in milliseconds)
+String lastOled1Content = "";
+String lastOled2Content = "";
+
 // ---------------------- Logging Macros ----------------------
 #define logInfo(msg) Serial.println(String("[INFO] ") + msg)
 #define logError(msg) Serial.println(String("[ERROR] ") + msg)
@@ -150,6 +157,7 @@ void loadSchedules();
 void checkSchedules();
 void loadSlotMap();
 String getPillName(int drum, int slot);
+String getPillNameForSlot(int drum, int slot);
 void dispensePill(int drum, int pills = 1);
 void logEvent(String eventMessage, bool updateLastAction);
 void startBuzzerGradual();
@@ -158,6 +166,12 @@ void updateOledsWithNextSchedule();
 DateTime getRTCTime();
 void showTakenOnOled(int drum, const String &pill);
 void showEmptyOnOled(int drum);
+void showDispensingOnOled(int drum, int pills);
+void saveSchedules();
+void saveSlotMap();
+void updateSlotMapEntry(int drum, int slot, String pillName);
+bool updateOledDisplay(int drum, const String &line1, const String &line2);
+void showErrorOnOled(int drum, const String &errorMsg);
 
 // ---------------------- Setup ----------------------
 void setup()
@@ -184,6 +198,35 @@ void setup()
 void loop()
 {
     dnsServer.processNextRequest();
+
+    // Check for refilled drums periodically
+    for (int d = 0; d < 2; d++)
+    {
+        if (drumIsEffectivelyEmpty[d] && millis() - lastEmptyCheckTime[d] > EMPTY_CHECK_INTERVAL)
+        {
+            lastEmptyCheckTime[d] = millis();
+
+            // Scan all slots (1..7) to detect any refilled position
+            bool refilled = false;
+            for (int s = 1; s <= 7; s++)
+            {
+                String p = getPillNameForSlot(d + 1, s);
+                if (p != "Empty" && p != "Ready to insert")
+                {
+                    refilled = true;
+                    break;
+                }
+            }
+
+            if (refilled)
+            {
+                logInfo("Drum " + String(d + 1) + " has pills detected. Clearing empty state.");
+                drumIsEffectivelyEmpty[d] = false;
+                emptyDisplayUntil[d] = 0;      // Reset the display timeout
+                updateOledsWithNextSchedule(); // Update the display
+            }
+        }
+    }
 
     if (currentState == IDLE)
     {
@@ -301,12 +344,21 @@ void initRTC()
         if (!rtc.begin())
         {
             logError("RTC not found.");
+            xSemaphoreGive(i2c_mutex);
+            return;
         }
-        if (rtc.lostPower())
+
+        bool rtcInitialized = preferences.getBool("rtcInit", false);
+        DateTime now = rtc.now();
+        bool invalidTime = (now.year() < 2020);
+
+        if (!rtcInitialized || invalidTime)
         {
-            logError("RTC lost power, setting time to compile time.");
+            logInfo("Setting RTC to compile time.");
             rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+            preferences.putBool("rtcInit", true);
         }
+
         xSemaphoreGive(i2c_mutex);
     }
 }
@@ -342,16 +394,20 @@ void initOLEDs()
         }
         xSemaphoreGive(i2c_mutex);
     }
-    if (oled2.begin())
+    if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(2000)) == pdTRUE)
     {
-        oled2.clearBuffer();
-        oled2.setFont(u8g2_font_ncenB08_tr);
-        oled2.drawStr(0, 20, "Drum 2 Initializing");
-        oled2.sendBuffer();
-    }
-    else
-    {
-        logError("OLED2 init failed.");
+        if (oled2.begin())
+        {
+            oled2.clearBuffer();
+            oled2.setFont(u8g2_font_ncenB08_tr);
+            oled2.drawStr(0, 20, "Drum 2 Initializing");
+            oled2.sendBuffer();
+        }
+        else
+        {
+            logError("OLED2 init failed.");
+        }
+        xSemaphoreGive(i2c_mutex);
     }
 }
 
@@ -600,15 +656,65 @@ void checkSchedules()
     }
 }
 
+// Function to show dispensing status on OLED
+void showDispensingOnOled(int drum, int pills)
+{
+    String line1 = "Dispensing...";
+    String line2 = String(pills) + " pill(s)";
+    bool displaySuccess = false;
+    int retryCount = 0;
+
+    while (!displaySuccess && retryCount < 3)
+    {
+        if (drum == 1)
+        {
+            if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(1000)) == pdTRUE)
+            {
+                oled1.clearBuffer();
+                oled1.setFont(u8g2_font_ncenB08_tr);
+                oled1.drawStr(0, 20, line1.c_str());
+                oled1.drawStr(0, 40, line2.c_str());
+                oled1.sendBuffer();
+                xSemaphoreGive(i2c_mutex);
+                displaySuccess = true;
+            }
+        }
+        else
+        {
+            if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(1000)) == pdTRUE)
+            {
+                oled2.clearBuffer();
+                oled2.setFont(u8g2_font_ncenB08_tr);
+                oled2.drawStr(0, 20, line1.c_str());
+                oled2.drawStr(0, 40, line2.c_str());
+                oled2.sendBuffer();
+                xSemaphoreGive(i2c_mutex);
+                displaySuccess = true;
+            }
+        }
+
+        if (!displaySuccess)
+        {
+            retryCount++;
+            delay(50); // Short delay before retry
+        }
+    }
+}
+
 void dispensePill(int drum, int pills)
 {
     if (currentState != IDLE)
     {
         logError("Dispense ignored: system busy.");
+        showErrorOnOled(drum, "System busy");
         return;
     }
     pillsBeingDispensed = pills; // Set the global pill count for this operation
     logInfo(String("Dispensing ") + pills + " pill(s) from Drum " + String(drum));
+
+    // Show dispensing status on OLED
+    showDispensingOnOled(drum, pills);
+
     if (drum == 1)
     {
         currentState = DISPENSING_DRUM1;
@@ -860,30 +966,149 @@ void stopBuzzer()
     noTone(buzzerPin);
 }
 
+// ... existing code ...
+
 void showTakenOnOled(int drum, const String &pill)
 {
     String line1 = "Dose Confirmed!";
     String line2 = pill.substring(0, 15);
+    bool displaySuccess = false;
+    int retryCount = 0;
+
+    while (!displaySuccess && retryCount < 3)
+    {
+        if (drum == 1)
+        {
+            if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(1000)) == pdTRUE)
+            {
+                oled1.clearBuffer();
+                oled1.setFont(u8g2_font_ncenB08_tr);
+                oled1.drawStr(0, 20, line1.c_str());
+                oled1.drawStr(0, 40, line2.c_str());
+                oled1.sendBuffer();
+                xSemaphoreGive(i2c_mutex);
+                displaySuccess = true;
+            }
+        }
+        else
+        {
+            if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(1000)) == pdTRUE)
+            {
+                oled2.clearBuffer();
+                oled2.setFont(u8g2_font_ncenB08_tr);
+                oled2.drawStr(0, 20, line1.c_str());
+                oled2.drawStr(0, 40, line2.c_str());
+                oled2.sendBuffer();
+                xSemaphoreGive(i2c_mutex);
+                displaySuccess = true;
+            }
+        }
+
+        if (!displaySuccess)
+        {
+            retryCount++;
+            delay(50); // Short delay before retry
+        }
+    }
+
+    if (!displaySuccess)
+    {
+        logError("Failed to update OLED " + String(drum) + " after multiple attempts");
+    }
+}
+
+// ... existing code ...
+// ... existing code ...
+
+// Helper function to update OLED display only if content has changed
+bool updateOledDisplay(int drum, const String &line1, const String &line2)
+{
+    String content = line1 + line2;
+    bool contentChanged = false;
+
     if (drum == 1)
     {
-        if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(1000)) == pdTRUE)
-        {
-            oled1.clearBuffer();
-            oled1.setFont(u8g2_font_ncenB08_tr);
-            oled1.drawStr(0, 20, line1.c_str());
-            oled1.drawStr(0, 40, line2.c_str());
-            oled1.sendBuffer();
-            xSemaphoreGive(i2c_mutex);
-        }
+        contentChanged = (content != lastOled1Content);
+        lastOled1Content = content;
     }
     else
     {
-        oled2.clearBuffer();
-        oled2.setFont(u8g2_font_ncenB08_tr);
-        oled2.drawStr(0, 20, line1.c_str());
-        oled2.drawStr(0, 40, line2.c_str());
-        oled2.sendBuffer();
+        contentChanged = (content != lastOled2Content);
+        lastOled2Content = content;
     }
+
+    if (!contentChanged)
+    {
+        return true; // No need to update, consider it successful
+    }
+
+    bool displaySuccess = false;
+    int retryCount = 0;
+
+    while (!displaySuccess && retryCount < 3)
+    {
+        if (drum == 1)
+        {
+            if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(1000)) == pdTRUE)
+            {
+                oled1.clearBuffer();
+                oled1.setFont(u8g2_font_ncenB08_tr);
+                oled1.drawStr(0, 20, line1.c_str());
+                oled1.drawStr(0, 40, line2.c_str());
+                oled1.sendBuffer();
+                xSemaphoreGive(i2c_mutex);
+                displaySuccess = true;
+            }
+        }
+        else
+        {
+            if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(1000)) == pdTRUE)
+            {
+                oled2.clearBuffer();
+                oled2.setFont(u8g2_font_ncenB08_tr);
+                oled2.drawStr(0, 20, line1.c_str());
+                oled2.drawStr(0, 40, line2.c_str());
+                oled2.sendBuffer();
+                xSemaphoreGive(i2c_mutex);
+                displaySuccess = true;
+            }
+        }
+
+        if (!displaySuccess)
+        {
+            retryCount++;
+            delay(50); // Short delay before retry
+        }
+    }
+
+    if (!displaySuccess)
+    {
+        logError("Failed to update OLED " + String(drum) + " after multiple attempts");
+    }
+
+    return displaySuccess;
+}
+
+// Function to display error messages on OLED
+void showErrorOnOled(int drum, const String &errorMsg)
+{
+    String line1 = "Error:";
+    String line2 = errorMsg.substring(0, 15); // Limit to 15 chars
+    updateOledDisplay(drum, line1, line2);
+}
+
+// Function to get the pill name for a specific drum and slot
+String getPillNameForSlot(int drum, int slot)
+{
+    // Search through the slotMap to find the matching entry
+    for (int i = 0; i < slotMapCount; i++)
+    {
+        if (slotMap[i].drum == drum && slotMap[i].slot == slot)
+        {
+            return slotMap[i].pillName;
+        }
+    }
+    return "Empty"; // Default if not found
 }
 
 void showEmptyOnOled(int drum)
@@ -891,28 +1116,14 @@ void showEmptyOnOled(int drum)
     drumIsEffectivelyEmpty[drum - 1] = true;
     String line1 = "Drum " + String(drum) + " is empty";
     String line2 = "Please refill.";
-    if (drum == 1)
-    {
-        if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(1000)) == pdTRUE)
-        {
-            oled1.clearBuffer();
-            oled1.setFont(u8g2_font_ncenB08_tr);
-            oled1.drawStr(0, 20, line1.c_str());
-            oled1.drawStr(0, 40, line2.c_str());
-            oled1.sendBuffer();
-            xSemaphoreGive(i2c_mutex);
-        }
-    }
-    else
-    {
-        oled2.clearBuffer();
-        oled2.setFont(u8g2_font_ncenB08_tr);
-        oled2.drawStr(0, 20, line1.c_str());
-        oled2.drawStr(0, 40, line2.c_str());
-        oled2.sendBuffer();
-    }
+
+    // Set a timeout for the empty display (10 minutes)
+    emptyDisplayUntil[drum - 1] = millis() + 600000;
+
+    updateOledDisplay(drum, line1, line2);
 }
 
+// ... existing code ...
 
 void updateOledsWithNextSchedule()
 {
@@ -922,10 +1133,16 @@ void updateOledsWithNextSchedule()
 
     for (int d = 1; d <= 2; d++)
     {
-        if (drumIsEffectivelyEmpty[d - 1])
+        // Check if we're still in the empty display timeout period
+        if (drumIsEffectivelyEmpty[d - 1] && emptyDisplayUntil[d - 1] > millis())
         {
-            showEmptyOnOled(d);
+            // Keep showing the empty message
             continue;
+        }
+        else if (drumIsEffectivelyEmpty[d - 1])
+        {
+            // Empty display timeout has expired, show the next schedule anyway
+            // but keep drumIsEffectivelyEmpty true until refilled
         }
 
         int nextHour = -1, nextMin = -1;
@@ -973,25 +1190,9 @@ void updateOledsWithNextSchedule()
             line2 = String(timeBuf);
         }
 
-        if (d == 1)
-        {
-            if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(1000)) == pdTRUE)
-            {
-                oled1.clearBuffer();
-                oled1.setFont(u8g2_font_ncenB08_tr);
-                oled1.drawStr(0, 12, "Drum 1 Next:");
-                oled1.drawStr(0, 32, line2.c_str());
-                oled1.sendBuffer();
-                xSemaphoreGive(i2c_mutex);
-            }
-        }
-        else
-        {
-            oled2.clearBuffer();
-            oled2.setFont(u8g2_font_ncenB08_tr);
-            oled2.drawStr(0, 12, "Drum 2 Next:");
-            oled2.drawStr(0, 32, line2.c_str());
-            oled2.sendBuffer();
-        }
+        String line1 = "Drum " + String(d) + " Next:";
+
+        // Use our helper function to update the display only if content has changed
+        updateOledDisplay(d, line1, line2);
     }
 }

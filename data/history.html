@@ -4,6 +4,7 @@
   <title>Medicine Dispenser - History</title>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="./style.css">
   <style>
     /* --- General & Typography --- */
     body {
@@ -25,6 +26,7 @@
     .header {
       background: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
       border-radius: 20px;
       padding: 1.5rem;
       margin-bottom: 1.5rem;
@@ -58,6 +60,12 @@
       transform: translateY(-50%) translateY(-2px);
     }
 
+    /* RTL adjustments */
+    body.rtl .back-button {
+      left: auto;
+      right: 1.5rem;
+    }
+
     h1 {
       font-size: 2.2rem;
       font-weight: 700;
@@ -78,6 +86,7 @@
     .filters {
       background: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
       border-radius: 20px;
       padding: 1.5rem;
       margin-bottom: 1.5rem;
@@ -177,6 +186,7 @@
 
     .stat-card {
       background: rgba(255, 255, 255, 0.95);
+      -webkit-backdrop-filter: blur(10px);
       backdrop-filter: blur(10px);
       border-radius: 15px;
       padding: 1.5rem;
@@ -213,6 +223,7 @@
     .history-section {
       background: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
       border-radius: 20px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.1);
       overflow: hidden;
@@ -289,6 +300,13 @@
       position: sticky;
       top: 0;
       backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    /* RTL table alignment */
+    body.rtl .history-table th,
+    body.rtl .history-table td {
+      text-align: right;
     }
 
     .history-table td {
@@ -436,44 +454,48 @@
   <div class="container">
     <!-- Header -->
     <div class="header">
-      <a href="/" class="back-button">← Back to Dashboard</a>
-      <h1>📊 History & Analytics</h1>
-      <div class="subtitle">Complete medication dispensing history</div>
+      <a href="/" class="back-button"><span data-i18n="history.backToDashboard">← Back to Dashboard</span></a>
+      <h1><span data-i18n="history.pageTitle">📊 History & Analytics</span></h1>
+      <div class="subtitle"><span data-i18n="history.subtitle">Complete medication dispensing history</span></div>
+      <div class="lang-toggle" style="margin-top: 0.5rem;">
+        <button id="langToggleBtn" class="btn btn-primary" onclick="toggleLanguage()" title="Switch language">العربية</button>
+      </div>
     </div>
 
     <!-- Filters -->
     <div class="filters">
-      <h2 class="filter-title">Filters & Options</h2>
+      <h2 class="filter-title"><span data-i18n="history.filters.title">Filters & Options</span></h2>
       
       <div class="filter-grid">
         <div class="filter-group">
-          <label class="filter-label">📅 Time Period</label>
+          <label class="filter-label"><span data-i18n="history.filters.timePeriod">📅 Time Period</span></label>
           <div class="filter-buttons">
-            <button class="filter-btn active" onclick="setTimeFilter('all')">All Time</button>
-            <button class="filter-btn" onclick="setTimeFilter('today')">Today</button>
-            <button class="filter-btn" onclick="setTimeFilter('week')">This Week</button>
-            <button class="filter-btn" onclick="setTimeFilter('month')">This Month</button>
+            <button class="filter-btn active" onclick="setTimeFilter('all')"><span data-i18n="history.filters.buttons.allTime">All Time</span></button>
+            <button class="filter-btn" onclick="setTimeFilter('today')"><span data-i18n="history.filters.buttons.today">Today</span></button>
+            <button class="filter-btn" onclick="setTimeFilter('week')"><span data-i18n="history.filters.buttons.week">This Week</span></button>
+            <button class="filter-btn" onclick="setTimeFilter('month')"><span data-i18n="history.filters.buttons.month">This Month</span></button>
           </div>
         </div>
 
         <div class="filter-group">
-          <label class="filter-label">🎯 Event Type</label>
+          <label class="filter-label"><span data-i18n="history.filters.eventType">🎯 Event Type</span></label>
           <div class="filter-buttons">
-            <button class="filter-btn active" onclick="setEventFilter('all')">All Events</button>
-            <button class="filter-btn" onclick="setEventFilter('taken')">Taken</button>
-            <button class="filter-btn" onclick="setEventFilter('missed')">Missed</button>
-            <button class="filter-btn" onclick="setEventFilter('dispensed')">Dispensed</button>
+            <button class="filter-btn active" onclick="setEventFilter('all')"><span data-i18n="history.filters.buttons.allEvents">All Events</span></button>
+            <button class="filter-btn" onclick="setEventFilter('taken')"><span data-i18n="history.filters.buttons.taken">Taken</span></button>
+            <button class="filter-btn" onclick="setEventFilter('missed')"><span data-i18n="history.filters.buttons.missed">Missed</span></button>
+            <button class="filter-btn" onclick="setEventFilter('dispensed')"><span data-i18n="history.filters.buttons.dispensed">Dispensed</span></button>
           </div>
         </div>
 
         <div class="filter-group">
-          <label class="filter-label">📅 From Date</label>
-          <input type="date" id="fromDate" onchange="applyDateFilter()">
+          <!-- Fix labels association and input attributes -->
+          <label class="filter-label" for="fromDate"><span data-i18n="history.filters.fromDate">📅 From Date</span></label>
+          <input type="date" id="fromDate" onchange="applyDateFilter()" data-i18n-placeholder="history.filters.fromDate" title="📅 From Date">
         </div>
 
         <div class="filter-group">
-          <label class="filter-label">📅 To Date</label>
-          <input type="date" id="toDate" onchange="applyDateFilter()">
+          <label class="filter-label" for="toDate"><span data-i18n="history.filters.toDate">📅 To Date</span></label>
+          <input type="date" id="toDate" onchange="applyDateFilter()" data-i18n-placeholder="history.filters.toDate" title="📅 To Date">
         </div>
       </div>
     </div>
@@ -482,39 +504,39 @@
     <div class="stats-grid">
       <div class="stat-card stat-total">
         <div class="stat-number" id="totalEvents">-</div>
-        <div class="stat-label">Total Events</div>
+        <div class="stat-label"><span data-i18n="history.stats.totalEvents">Total Events</span></div>
       </div>
       <div class="stat-card stat-taken">
         <div class="stat-number" id="takenCount">-</div>
-        <div class="stat-label">Medicines Taken</div>
+        <div class="stat-label"><span data-i18n="history.stats.medicinesTaken">Medicines Taken</span></div>
       </div>
       <div class="stat-card stat-missed">
         <div class="stat-number" id="missedCount">-</div>
-        <div class="stat-label">Doses Missed</div>
+        <div class="stat-label"><span data-i18n="history.stats.dosesMissed">Doses Missed</span></div>
       </div>
       <div class="stat-card stat-dispensed">
         <div class="stat-number" id="dispensedCount">-</div>
-        <div class="stat-label">Auto Dispensed</div>
+        <div class="stat-label"><span data-i18n="history.stats.autoDispensed">Auto Dispensed</span></div>
       </div>
     </div>
 
     <!-- History Table -->
     <div class="history-section">
       <div class="history-header">
-        <h3 class="history-title">Complete History</h3>
-        <button class="export-btn" onclick="exportHistory()">📥 Export CSV</button>
+        <h3 class="history-title"><span data-i18n="history.table.title">Complete History</span></h3>
+        <button class="export-btn" onclick="exportHistory()"><span data-i18n="history.table.exportCsv">📥 Export CSV</span></button>
       </div>
 
       <div class="table-container">
         <table class="history-table">
           <thead>
             <tr>
-              <th>📅 Date & Time</th>
-              <th>📊 Event</th>
-              <th class="hide-mobile">💊 Medicine</th>
-              <th class="hide-mobile">🥁 Drum</th>
-              <th class="hide-mobile">🎯 Slot</th>
-              <th>📝 Details</th>
+              <th><span data-i18n="history.table.headers.datetime">📅 Date & Time</span></th>
+              <th><span data-i18n="history.table.headers.event">📊 Event</span></th>
+              <th class="hide-mobile"><span data-i18n="history.table.headers.medicine">💊 Medicine</span></th>
+              <th class="hide-mobile"><span data-i18n="history.table.headers.drum">🥁 Drum</span></th>
+              <th class="hide-mobile"><span data-i18n="history.table.headers.slot">🎯 Slot</span></th>
+              <th><span data-i18n="history.table.headers.details">📝 Details</span></th>
             </tr>
           </thead>
           <tbody id="historyTableBody">
@@ -526,26 +548,35 @@
       <!-- Loading State -->
       <div id="loadingState" class="loading-state">
         <div class="loading-spinner"></div>
-        <div>Loading history data...</div>
+        <div><span data-i18n="history.loading.loadingData">Loading history data...</span></div>
       </div>
 
       <!-- Empty State -->
       <div id="emptyState" class="empty-state" style="display: none;">
         <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
-        <div>No history records found</div>
+        <div><span data-i18n="history.empty.title">No history records found</span></div>
         <div style="font-size: 0.9rem; color: #999; margin-top: 0.5rem;">
-          History will appear here once the medicine dispenser starts operating
+          <span data-i18n="history.empty.subtitle">History will appear here once the dispenser starts operating.</span>
         </div>
       </div>
     </div>
   </div>
 
+  <script src="./script.js"></script>
   <script>
     // Global state
     let historyData = [];
     let filteredData = [];
     let currentTimeFilter = 'all';
     let currentEventFilter = 'all';
+
+    // Page-specific i18n hook: called from applyLanguage in script.js
+    window.onLanguageChanged = function(lang) {
+      try {
+        updateTable();
+        updateStatistics();
+      } catch (_) {}
+    };
 
     // --- Data Fetching ---
     async function loadHistoryData() {
@@ -570,11 +601,12 @@
         console.error('Error fetching history data:', error);
         loadingState.style.display = 'none';
         emptyState.style.display = 'block';
+        const dict = (i18n[currentLang] && i18n[currentLang].history) || i18n.en.history;
         emptyState.innerHTML = `
           <div style="font-size: 3rem; margin-bottom: 1rem;">🔌</div>
-          <div>Could not load history</div>
+          <div>${dict.error.loadFailedTitle}</div>
           <div style="font-size: 0.9rem; color: #999; margin-top: 0.5rem;">
-            Failed to connect to the dispenser. Please check the connection.
+            ${dict.error.loadFailedSubtitle}
           </div>
         `;
         historyData = [];
@@ -664,6 +696,7 @@
       const tbody = document.getElementById('historyTableBody');
       const loadingState = document.getElementById('loadingState');
       const emptyState = document.getElementById('emptyState');
+      const dict = (i18n[currentLang] && i18n[currentLang].history) || i18n.en.history;
 
       loadingState.style.display = 'none';
 
@@ -673,14 +706,14 @@
         if (historyData.length > 0) {
             emptyState.innerHTML = `
                 <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
-                <div>No records match your filters</div>
+                <div>${dict.empty.noMatch}</div>
             `;
         } else {
             emptyState.innerHTML = `
                 <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
-                <div>No history records found</div>
+                <div>${dict.empty.title}</div>
                 <div style="font-size: 0.9rem; color: #999; margin-top: 0.5rem;">
-                  History will appear here once the dispenser starts operating.
+                  ${dict.empty.subtitle}
                 </div>
             `;
         }
@@ -692,23 +725,50 @@
       
       filteredData.forEach(item => {
         const row = document.createElement('tr');
-        
+
         let eventClass = 'event-other';
-        if (item.event.toLowerCase() === 'taken') eventClass = 'event-taken';
-        else if (item.event.toLowerCase() === 'missed') eventClass = 'event-missed';
-        else if (item.event.toLowerCase() === 'dispensed') eventClass = 'event-dispensed';
-        
+        const eventLower = String(item.event || '').toLowerCase();
+        if (eventLower === 'taken') eventClass = 'event-taken';
+        else if (eventLower === 'missed') eventClass = 'event-missed';
+        else if (eventLower === 'dispensed') eventClass = 'event-dispensed';
+
         const formattedDate = new Date(item.timestamp).toLocaleString();
-        
-        row.innerHTML = `
-          <td>${formattedDate}</td>
-          <td><span class="event-badge ${eventClass}">${item.event}</span></td>
-          <td class="hide-mobile">${item.medicine}</td>
-          <td class="hide-mobile">${item.drum !== '-' ? 'Drum ' + item.drum : '-'}</td>
-          <td class="hide-mobile">${item.slot !== '-' ? 'Slot ' + item.slot : '-'}</td>
-          <td>${item.details}</td>
-        `;
-        
+
+        const tdDate = document.createElement('td');
+        tdDate.textContent = formattedDate;
+        row.appendChild(tdDate);
+
+        const tdEvent = document.createElement('td');
+        const badge = document.createElement('span');
+        badge.className = `event-badge ${eventClass}`;
+        const eventLabelMap = {
+          taken: dict.filters.buttons.taken,
+          missed: dict.filters.buttons.missed,
+          dispensed: dict.filters.buttons.dispensed
+        };
+        badge.textContent = eventLabelMap[eventLower] || (item.event || '');
+        tdEvent.appendChild(badge);
+        row.appendChild(tdEvent);
+
+        const tdMed = document.createElement('td');
+        tdMed.className = 'hide-mobile';
+        tdMed.textContent = item.medicine || '-';
+        row.appendChild(tdMed);
+
+        const tdDrum = document.createElement('td');
+        tdDrum.className = 'hide-mobile';
+        tdDrum.textContent = item.drum !== '-' && item.drum != null ? `${dict.table.drumPrefix} ${item.drum}` : '-';
+        row.appendChild(tdDrum);
+
+        const tdSlot = document.createElement('td');
+        tdSlot.className = 'hide-mobile';
+        tdSlot.textContent = item.slot !== '-' && item.slot != null ? `${dict.table.slotPrefix} ${item.slot}` : '-';
+        row.appendChild(tdSlot);
+
+        const tdDetails = document.createElement('td');
+        tdDetails.textContent = item.details || '';
+        row.appendChild(tdDetails);
+
         tbody.appendChild(row);
       });
     }
@@ -727,13 +787,21 @@
 
     // --- Actions ---
     function exportHistory() {
+      const dict = (i18n[currentLang] && i18n[currentLang].history) || i18n.en.history;
       if (filteredData.length === 0) {
-        alert('No data to export');
+        alert(dict.error.noDataToExport);
         return;
       }
 
       // Create CSV content
-      const headers = ['Date & Time', 'Event', 'Medicine', 'Drum', 'Slot', 'Details'];
+      const headers = [
+        dict.table.headers.datetime,
+        dict.table.headers.event,
+        dict.table.headers.medicine,
+        dict.table.headers.drum,
+        dict.table.headers.slot,
+        dict.table.headers.details
+      ];
       const csvContent = [
         headers.join(','),
         ...filteredData.map(item => [
@@ -742,7 +810,7 @@
           `"${item.medicine}"`,
           `"${item.drum}"`,
           `"${item.slot}"`,
-          `"${item.details.replace(/"/g, '""')}"`
+          `"${String(item.details || '').replace(/"/g, '""')}"`
         ].join(','))
       ].join('\n');
 
@@ -760,6 +828,13 @@
 
     // --- Initialization ---
     document.addEventListener('DOMContentLoaded', function() {
+      // Initialize i18n and RTL based on saved language
+      try {
+        applyLanguage(localStorage.getItem('ui_lang') || 'en');
+      } catch (e) {
+        console.warn('applyLanguage not available yet:', e);
+      }
+
       // Set default date for 'To' date picker
       const today = new Date();
       document.getElementById('toDate').value = today.toISOString().split('T')[0];

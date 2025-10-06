@@ -18,6 +18,7 @@ body {
 /* --- Header --- */
 .header {
     background: rgba(255, 255, 255, 0.95);
+    -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
     border-radius: 20px;
     padding: 1.5rem;
@@ -84,6 +85,7 @@ h1 {
 /* --- Cards --- */
 .card {
     background: rgba(255, 255, 255, 0.95);
+    -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
     border-radius: 20px;
     padding: 1.5rem;
@@ -258,6 +260,7 @@ h1 {
 input[type="text"],
 input[type="time"],
 input[type="datetime-local"],
+input[type="number"],
 select {
     padding: 1rem;
     font-size: 1rem;
@@ -274,6 +277,22 @@ select:focus {
     outline: none;
     border-color: #667eea;
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Ensure native calendar/time pickers are visible */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"] {
+    -webkit-appearance: auto;
+    appearance: auto;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    opacity: 1;
+    display: block;
+    cursor: pointer;
 }
 
 /* --- Buttons --- */
@@ -523,4 +542,90 @@ select:focus {
     .card-title {
         font-size: 1rem;
     }
+}
+/* Modern styling for number inputs in Medicine tab */
+.count-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 0.8rem 1rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  background: #ffffff;
+  font-size: 1rem;
+  color: #1c3d5a;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.count-input::placeholder {
+  color: #9aa7b2;
+}
+
+.count-input:focus {
+  outline: none;
+  border-color: #667eea;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.25);
+}
+
+.count-input:disabled {
+  background: #eef2f7;
+  color: #9aa7b2;
+  border-color: #e5e9f2;
+  cursor: not-allowed;
+}
+
+/* Remove default number spinners for a cleaner look */
+
+input[type="number"].count-input {
+  appearance: auto;
+  -moz-appearance: textfield;
+}
+/* RTL Support */
+body.rtl {
+  direction: rtl;
+  text-align: right;
+}
+
+body.rtl .nav-tabs {
+  flex-direction: row-reverse;
+}
+
+body.rtl .nav-tab {
+  text-align: right;
+}
+
+body.rtl .card-title,
+body.rtl .form-label,
+body.rtl .list-header,
+body.rtl .empty-list,
+body.rtl .subtitle {
+  text-align: right;
+}
+
+/* Flip grids for RTL */
+body.rtl .form-grid,
+body.rtl .btn-grid {
+  direction: rtl;
+}
+
+/* Ensure inputs and selects take full width correctly in RTL */
+body.rtl input,
+body.rtl select,
+body.rtl textarea {
+  text-align: right;
+  box-sizing: border-box;
+}
+
+/* Adjust padding/margins for RTL in notice banners */
+body.rtl #scheduleGuardNotice {
+  border-left: none;
+  border-right: 4px solid #dc3545;
+}
+
+/* Settings warnings blocks (if any) */
+body.rtl .warning-block {
+  border-left: none;
+  border-right: 4px solid #ffc107;
 }
