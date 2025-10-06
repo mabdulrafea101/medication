@@ -199,6 +199,28 @@ async function loadAndDisplayMedicines() {
   }
 }
 
+// Fetches and updates the main system status
+async function refreshStatus() {
+  try {
+    const res = await fetch('/status');
+    if (!res.ok) {
+      throw new Error(`HTTP error ${res.status}`);
+    }
+    const data = await res.json();
+    document.getElementById('currentTime').textContent = data.time;
+    document.getElementById('drum1Status').textContent = `Slot ${data.slotDrum1}`;
+    document.getElementById('drum2Status').textContent = `Slot ${data.slotDrum2}`;
+    document.getElementById('wifiStatus').textContent = data.wifi;
+  } catch (error) {
+    console.error('Error refreshing status:', error);
+    // Display error state on the dashboard
+    document.getElementById('currentTime').textContent = 'Error';
+    document.getElementById('drum1Status').textContent = 'Error';
+    document.getElementById('drum2Status').textContent = 'Error';
+    document.getElementById('wifiStatus').textContent = 'Offline';
+  }
+}
+
     async function manualDispense(drum) {
       let pills = prompt("How many pills to dispense?", 1);
       if (pills === null) {
