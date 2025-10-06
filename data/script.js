@@ -4,10 +4,104 @@ let currentSchedules = [];
 const MAX_SLOTS_PER_DRUM = 7;
 let statusLoading = false; // prevent overlapping status refreshes
 
-// Safe no-op stubs for dashboard helpers (replace with real implementations when backend is ready)
-function refreshUpcomingSchedules() {}
-function refreshLogs() {}
-function refreshLastAction() {}
+// Dashboard helper to refresh upcoming schedules
+async function refreshUpcomingSchedules() {
+  const schedulesEl = document.getElementById('upcomingSchedules');
+  if (!schedulesEl) return;
+  
+  try {
+    const res = await fetch('/api/upcoming-schedules');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    
+    const schedules = await res.json();
+    
+    if (schedules.length === 0) {
+      schedulesEl.innerHTML = '<div class="empty-list">No upcoming schedules found.</div>';
+      return;
+    }
+    
+    // Group schedules by day
+    const today = schedules.filter(s => s.day === 0);
+    const tomorrow = schedules.filter(s => s.day === 1);
+    
+    let html = '';
+    
+    if (today.length > 0) {
+      html += '<h4 style="margin: 0 0 10px 0; color: #333;">Today</h4>';
+      today.forEach(schedule => {
+        html += `
+          <div class="upcoming-schedule">
+            <div class="upcoming-schedule-time">${schedule.time}</div>
+            <div class="upcoming-schedule-medicine">
+              ${schedule.medicine} (Drum ${schedule.drum})
+              ${schedule.executed ? ' ✅' : ''}
+            </div>
+          </div>
+        `;
+      });
+    }
+    
+    if (tomorrow.length > 0) {
+      html += '<h4 style="margin: 15px 0 10px 0; color: #333;">Tomorrow</h4>';
+      tomorrow.forEach(schedule => {
+        html += `
+          <div class="upcoming-schedule">
+            <div class="upcoming-schedule-time">${schedule.time}</div>
+            <div class="upcoming-schedule-medicine">
+              ${schedule.medicine} (Drum ${schedule.drum})
+            </div>
+          </div>
+        `;
+      });
+    }
+    
+    schedulesEl.innerHTML = html;
+    
+  } catch (e) {
+    console.error('Error fetching upcoming schedules:', e);
+    schedulesEl.innerHTML = '<div class="empty-list">Error loading schedules.</div>';
+  }
+}
+async function refreshLogs() {
+  const logsEl = document.getElementById('logs');
+  const dict = (i18n[currentLang]?.dashboard) || i18n.en.dashboard;
+  if (logsEl) {
+    logsEl.textContent = dict.systemLogsLoading;
+  }
+  try {
+    const res = await fetch('/logs');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+    if (logsEl) {
+      logsEl.textContent = text;
+    }
+  } catch (e) {
+    if (logsEl) {
+      logsEl.textContent = dict.offlineText + ': ' + (e && e.message ? e.message : '');
+    }
+  }
+}
+async function refreshLastAction() {
+  const statusEl = document.getElementById('lastActionStatus');
+  const dict = (i18n[currentLang]?.dashboard) || i18n.en.dashboard;
+  if (statusEl) {
+    statusEl.textContent = dict.recentActivityLoading;
+  }
+  try {
+    const res = await fetch('/lastAction');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (statusEl) {
+      const ts = data.timestamp ? new Date(String(data.timestamp).replace(' ', 'T')).toLocaleString() : '';
+      const ev = data.event || '';
+      statusEl.textContent = ts && ev ? `${ts} — ${ev}` : ev || ts || '';
+    }
+  } catch (e) {
+    if (statusEl) {
+      statusEl.textContent = dict.offlineText + ': ' + (e && e.message ? e.message : '');
+    }
+  }
+}
 function refreshSchedulesList() {
   const container = document.getElementById('schedulesList');
   if (!container) return;
@@ -268,99 +362,7 @@ async function refreshStatus() {
   }
 }
 
-    async function manualDispense(drum) {
-      let pillsInput = prompt("How many pills to dispense?", 1);
-      if (pillsInput === null) return;
-      const pills = parseInt(String(pillsInput).trim(), 10);
-      if (!Number.isFinite(pills) || pills <= 0) {
-        alert('Please enter a valid positive number of pills.');
-        return;
-      }
-      try {
-        let formData = new FormData();
-        formData.append("drum", drum);
-        formData.append("pills", String(pills));
-        let res = await fetch('/manualDispense', { method: "POST", body: formData });
-        const text = await res.text();
-        if (!res.ok) {
-          alert(`Error: ${text}`);
-        } else {
-          alert(text);
-        }
-      } catch (err) {
-        alert('Error performing manual dispense.');
-        console.error('manualDispense error:', err);
-      } finally {
-        try { refreshLogs(); } catch (_) {}
-      }
-    }
 
-    async function saveSchedules() {
-        if (!confirm('Saving new schedules will perform a LOGICAL reset. You will be prompted to clear the drums and must then refill them starting from Slot 1. Are you sure you want to continue?')) {
-            return;
-        }
-
-        const frequency1 = document.getElementById('scheduleFrequency1').value;
-        const frequency2 = document.getElementById('scheduleFrequency2').value;
-
-        let scheduleData = {
-            drum1: { frequency: frequency1, times: [] },
-            drum2: { frequency: frequency2, times: [] }
-        };
-
-        const isValidTime = (t) => {
-            if (typeof t !== 'string') return false;
-            const m = t.match(/^\d{2}:\d{2}$/);
-            if (!m) return false;
-            const [hh, mm] = t.split(':').map(n => parseInt(n, 10));
-            return Number.isFinite(hh) && Number.isFinite(mm) && hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59;
-        };
-
-        if (frequency1 === 'once') {
-            const time1 = document.getElementById('onceDailyTime1').value;
-            if (!time1) return alert('Please set a time for Drum 1.');
-            if (!isValidTime(time1)) return alert('Please enter a valid time (HH:MM) for Drum 1.');
-            scheduleData.drum1.times.push(time1);
-        } else {
-            const time1_1 = document.getElementById('twiceDailyTime1_1').value;
-            const time1_2 = document.getElementById('twiceDailyTime1_2').value;
-            if (!time1_1 || !time1_2) return alert('Please set both times for Drum 1.');
-            if (!isValidTime(time1_1) || !isValidTime(time1_2)) return alert('Please enter valid times (HH:MM) for Drum 1.');
-            if (time1_1 === time1_2) return alert('Drum 1 times must be different.');
-            scheduleData.drum1.times.push(time1_1, time1_2);
-        }
-
-        if (frequency2 === 'once') {
-            const time2 = document.getElementById('onceDailyTime2').value;
-            if (!time2) return alert('Please set a time for Drum 2.');
-            if (!isValidTime(time2)) return alert('Please enter a valid time (HH:MM) for Drum 2.');
-            scheduleData.drum2.times.push(time2);
-        } else {
-            const time2_1 = document.getElementById('twiceDailyTime2_1').value;
-            const time2_2 = document.getElementById('twiceDailyTime2_2').value;
-            if (!time2_1 || !time2_2) return alert('Please set both times for Drum 2.');
-            if (!isValidTime(time2_1) || !isValidTime(time2_2)) return alert('Please enter valid times (HH:MM) for Drum 2.');
-            if (time2_1 === time2_2) return alert('Drum 2 times must be different.');
-            scheduleData.drum2.times.push(time2_1, time2_2);
-        }
-
-        let formData = new FormData();
-        formData.append("data", JSON.stringify(scheduleData));
-
-        try {
-            let res = await fetch('/setDailySchedules', { method: "POST", body: formData });
-            const text = await res.text();
-            if (!res.ok) {
-                alert(`Error: ${text}`);
-            } else {
-                alert(text);
-                await clearDrums();
-            }
-        } catch (err) {
-            alert('Error saving schedules.');
-            console.error('saveSchedules error:', err);
-        }
-    }
 
 if (!window.__appIntervalsInitialized) {
         window.__appIntervalsInitialized = true;
@@ -371,316 +373,137 @@ if (!window.__appIntervalsInitialized) {
     }
 
     // Initial load
-    function initializeApp() {
-        if (window.__appInitialized) return;
-        window.__appInitialized = true;
-        refreshStatus();
-        refreshLogs();
-        refreshLastAction();
-        loadAndDisplayMedicines(); // This will fetch data and then update the relevant UI parts
-        refreshSchedulesList();
-        refreshUpcomingSchedules();
+    window.addEventListener('DOMContentLoaded', () => {
+      applyLanguage(localStorage.getItem(LANG_KEY) || 'en');
+      initializeApp();
+    });
 
-        // Event listeners for drum 1 schedule frequency
-        const scheduleFrequency1 = document.getElementById('scheduleFrequency1');
-        const onceADayOptions1 = document.getElementById('onceADayOptions1');
-        const twiceADayOptions1 = document.getElementById('twiceADayOptions1');
-
-        scheduleFrequency1.addEventListener('change', function() {
-            if (this.value === 'once') {
-                onceADayOptions1.style.display = 'block';
-                twiceADayOptions1.style.display = 'none';
-            } else {
-                onceADayOptions1.style.display = 'none';
-                twiceADayOptions1.style.display = 'block';
-            }
-        });
-
-        // Event listeners for drum 2 schedule frequency
-        const scheduleFrequency2 = document.getElementById('scheduleFrequency2');
-        const onceADayOptions2 = document.getElementById('onceADayOptions2');
-        const twiceADayOptions2 = document.getElementById('twiceADayOptions2');
-
-        scheduleFrequency2.addEventListener('change', function() {
-            if (this.value === 'once') {
-                onceADayOptions2.style.display = 'block';
-                twiceADayOptions2.style.display = 'none';
-            } else {
-                onceADayOptions2.style.display = 'none';
-                twiceADayOptions2.style.display = 'block';
-            }
-        });
-    }
-
-    async function clearDrums() {
-        try {
-            let res = await fetch('/clearDrums', { method: 'POST' });
-            alert(await res.text());
-            refreshStatus();
-        } catch (err) {
-            alert('Error clearing drums.');
-        }
-    }
-
-    initializeApp();
-
-// Extend i18n dictionary to include dashboard and common labels/placeholders
-if (typeof i18n === 'undefined') {
-  var i18n = {
-    en: {
-      app: { title: "💊 Medicine Dispenser", subtitle: "Smart medication management system" },
-      tabs: { dashboard: "📊 Dashboard", schedule: "⏰ Schedule", medicine: "💊 Medicine", manual: "🎮 Manual", settings: "⚙️ Settings" },
-      dashboard: {
-        systemStatusTitle: "System Status",
-        currentTimeLabel: "Current Time",
-        drum1PositionLabel: "Drum 1 Position",
-        drum2PositionLabel: "Drum 2 Position",
-        wifiConnectionLabel: "WiFi Connection",
-        recentActivityTitle: "Recent Activity",
-        recentActivityLoading: "Loading recent activity...",
-        systemLogsTitle: "System Logs",
-        systemLogsLoading: "Loading system logs...",
-        viewHistory: "📋 View Full History",
-        errorText: "Error",
-        offlineText: "Offline"
-      },
-      schedule: {
-        addNew: "Add New Schedule",
-        explain: "Schedule when medications should be dispensed automatically.",
-        guardNotice: "❗ Action Required: No medicines are configured yet. Please add medicines in the Medicine tab before creating schedules.",
-        datetime: "📅 Date & Time",
-        medicine: "💊 Medicine",
-        addButton: "Add Schedule",
-        current: "📅 Current Schedules",
-        emptyList: "No schedules added yet."
-      },
-      medicine: {
-        drum1: { title: "Drum 1 Configuration" },
-        listHeaderDrum1: "Configured Medicines in Drum 1",
-        addNewDrum1: "Add New Medicines to Drum 1",
-        drum2: { title: "Drum 2 Configuration" },
-        listHeaderDrum2: "Configured Medicines in Drum 2",
-        addNewDrum2: "Add New Medicines to Drum 2",
-        emptyDrum1: "Drum 1 is empty.",
-        emptyDrum2: "Drum 2 is empty.",
-        addCountPlaceholder: "Number of new medicines to add",
-        drumFullPlaceholder: "Drum is full",
-        capacityHint: "(7 slots available)",
-        errorLoadingData: "Error loading data."
-      },
-      manual: {
-        title: "Manual Dispense Control",
-        explain: "Manually dispense medications from either drum for testing or immediate needs.",
-        dispenseDrum1: "🥁 Dispense from Drum 1",
-        dispenseDrum2: "🥁 Dispense from Drum 2",
-        safetyLabel: "⚠️ Safety Notice:",
-        safetyText: "Manual dispensing should only be used for testing or emergency situations. Always verify the correct medication before dispensing."
-      },
-      settings: {
-        drum1: { title: "Drum 1 Schedule" },
-        frequency: "Schedule Frequency",
-        onceExplain: "Set the time for the daily dispense.",
-        dispenseTime: "Dispense Time",
-        twiceExplain: "Set the two times for the daily dispenses.",
-        firstDispense: "First Dispense Time",
-        secondDispense: "Second Dispense Time",
-        drum2: { title: "Drum 2 Schedule" },
-        saveBtn: "💾 Save Schedules & Logically Reset Drums",
-        onceOption: "Once a day",
-        twiceOption: "Twice a day"
-      },
-      common: {
-        selectMedicine: "Select a medicine"
-      },
-      history: {
-        backToDashboard: "← Back to Dashboard",
-        pageTitle: "📊 History & Analytics",
-        subtitle: "Complete medication dispensing history",
-        filters: {
-          title: "Filters & Options",
-          timePeriod: "📅 Time Period",
-          eventType: "🎯 Event Type",
-          fromDate: "📅 From Date",
-          toDate: "📅 To Date",
-          buttons: {
-            allTime: "All Time",
-            today: "Today",
-            week: "This Week",
-            month: "This Month",
-            allEvents: "All Events",
-            taken: "Taken",
-            missed: "Missed",
-            dispensed: "Dispensed"
-          }
-        },
-        stats: {
-          totalEvents: "Total Events",
-          medicinesTaken: "Medicines Taken",
-          dosesMissed: "Doses Missed",
-          autoDispensed: "Auto Dispensed"
-        },
-        table: {
-          title: "Complete History",
-          exportCsv: "📥 Export CSV",
-          headers: {
-            datetime: "📅 Date & Time",
-            event: "📊 Event",
-            medicine: "💊 Medicine",
-            drum: "🥁 Drum",
-            slot: "🎯 Slot",
-            details: "📝 Details"
-          },
-          drumPrefix: "Drum",
-          slotPrefix: "Slot"
-        },
-        loading: {
-          loadingData: "Loading history data..."
-        },
-        empty: {
-          title: "No history records found",
-          subtitle: "History will appear here once the dispenser starts operating.",
-          noMatch: "No records match your filters"
-        },
-        error: {
-          loadFailedTitle: "Could not load history",
-          loadFailedSubtitle: "Failed to connect to the dispenser. Please check the connection.",
-          noDataToExport: "No data to export"
-        }
-      }
+// Minimal i18n dictionary to avoid undefined errors and support core UI strings
+const i18n = {
+  en: {
+    dashboard: {
+      systemLogsLoading: "Loading system logs...",
+      recentActivityLoading: "Loading recent activity...",
+      errorText: "Error",
+      offlineText: "Offline"
     },
-    ar: {
-      app: { title: "💊 جهاز توزيع الأدوية", subtitle: "نظام ذكي لإدارة الأدوية" },
-      tabs: { dashboard: "📊 لوحة التحكم", schedule: "⏰ الجدول", medicine: "💊 الأدوية", manual: "🎮 التحكم اليدوي", settings: "⚙️ الإعدادات" },
-      dashboard: {
-        systemStatusTitle: "حالة النظام",
-        currentTimeLabel: "الوقت الحالي",
-        drum1PositionLabel: "موضع الأسطوانة 1",
-        drum2PositionLabel: "موضع الأسطوانة 2",
-        wifiConnectionLabel: "اتصال الواي فاي",
-        recentActivityTitle: "النشاط الأخير",
-        recentActivityLoading: "جارٍ تحميل النشاط الأخير...",
-        systemLogsTitle: "سجلات النظام",
-        systemLogsLoading: "جارٍ تحميل سجلات النظام...",
-        viewHistory: "📋 عرض السجل الكامل",
-        errorText: "خطأ",
-        offlineText: "غير متصل"
+    medicine: {
+      emptyDrum1: "Drum 1 is empty.",
+      emptyDrum2: "Drum 2 is empty.",
+      errorLoadingData: "Error loading data."
+    },
+    common: {
+      selectMedicine: "Select a medicine"
+    },
+    history: {
+      error: {
+        loadFailedTitle: "Could not load history",
+        loadFailedSubtitle: "Failed to connect to the dispenser. Please check the connection."
       },
-      schedule: {
-        addNew: "إضافة جدول جديد",
-        explain: "قم بجدولة مواعيد صرف الأدوية تلقائيًا.",
-        guardNotice: "❗ إجراء مطلوب: لا توجد أدوية مُكوّنة بعد. يرجى إضافة الأدوية في تبويب الأدوية قبل إنشاء الجداول.",
-        datetime: "📅 التاريخ والوقت",
-        medicine: "💊 الدواء",
-        addButton: "إضافة جدول",
-        current: "📅 الجداول الحالية",
-        emptyList: "لا توجد جداول حتى الآن."
+      loading: {
+        loadingData: "Loading history data..."
       },
-      medicine: {
-        drum1: { title: "إعدادات الأسطوانة 1" },
-        listHeaderDrum1: "الأدوية المُكوّنة في الأسطوانة 1",
-        addNewDrum1: "إضافة أدوية جديدة للأسطوانة 1",
-        drum2: { title: "إعدادات الأسطوانة 2" },
-        listHeaderDrum2: "الأدوية المُكوّنة في الأسطوانة 2",
-        addNewDrum2: "إضافة أدوية جديدة للأسطوانة 2",
-        emptyDrum1: "الأسطوانة 1 فارغة.",
-        emptyDrum2: "الأسطوانة 2 فارغة.",
-        addCountPlaceholder: "عدد الأدوية الجديدة المراد إضافتها",
-        drumFullPlaceholder: "الأسطوانة ممتلئة",
-        capacityHint: "(7 فتحات متاحة)",
-        errorLoadingData: "خطأ في تحميل البيانات."
-      },
-      manual: {
-        title: "التحكم في الصرف اليدوي",
-        explain: "قم بصرف الأدوية يدويًا من أي أسطوانة للاختبار أو للحالات الفورية.",
-        dispenseDrum1: "🥁 صرف من الأسطوانة 1",
-        dispenseDrum2: "🥁 صرف من الأسطوانة 2",
-        safetyLabel: "⚠️ إشعار السلامة:",
-        safetyText: "يجب استخدام الصرف اليدوي فقط للاختبار أو الحالات الطارئة. تأكد دائمًا من الدواء الصحيح قبل الصرف."
-      },
-      settings: {
-        drum1: { title: "جدول الأسطوانة 1" },
-        frequency: "تكرار الجدولة",
-        onceExplain: "حدد وقت الصرف اليومي.",
-        dispenseTime: "وقت الصرف",
-        twiceExplain: "حدد وقتين للصرف اليومي.",
-        firstDispense: "وقت الصرف الأول",
-        secondDispense: "وقت الصرف الثاني",
-        drum2: { title: "جدول الأسطوانة 2" },
-        saveBtn: "💾 حفظ الجداول وإعادة ضبط الأسطوانات منطقيًا",
-        onceOption: "مرة يوميًا",
-        twiceOption: "مرتان يوميًا"
-      },
-      common: {
-        selectMedicine: "اختر الدواء"
-      },
-      history: {
-        backToDashboard: "← العودة إلى لوحة التحكم",
-        pageTitle: "📊 السجل والتحليلات",
-        subtitle: "سجل كامل لصرف الأدوية",
-        filters: {
-          title: "عوامل التصفية والخيارات",
-          timePeriod: "📅 الفترة الزمنية",
-          eventType: "🎯 نوع الحدث",
-          fromDate: "📅 من تاريخ",
-          toDate: "📅 إلى تاريخ",
-          buttons: {
-            allTime: "كل الوقت",
-            today: "اليوم",
-            week: "هذا الأسبوع",
-            month: "هذا الشهر",
-            allEvents: "كل الأحداث",
-            taken: "تم التناول",
-            missed: "تم التفويت",
-            dispensed: "تم الصرف"
-          }
-        },
-        stats: {
-          totalEvents: "إجمالي الأحداث",
-          medicinesTaken: "الأدوية المُتناولة",
-          dosesMissed: "الجرعات الفائتة",
-          autoDispensed: "الصرف التلقائي"
-        },
-        table: {
-          title: "السجل الكامل",
-          exportCsv: "📥 تصدير CSV",
-          headers: {
-            datetime: "📅 التاريخ والوقت",
-            event: "📊 الحدث",
-            medicine: "💊 الدواء",
-            drum: "🥁 الأسطوانة",
-            slot: "🎯 الفتحة",
-            details: "📝 التفاصيل"
-          },
-          drumPrefix: "أسطوانة",
-          slotPrefix: "فتحة"
-        },
-        loading: {
-          loadingData: "جارٍ تحميل بيانات السجل..."
-        },
-        empty: {
-          title: "لا توجد سجلات في السجل",
-          subtitle: "سيظهر السجل هنا بمجرد بدء عمل جهاز الصرف.",
-          noMatch: "لا توجد سجلات مطابقة لمرشحاتك"
-        },
-        error: {
-          loadFailedTitle: "تعذر تحميل السجل",
-          loadFailedSubtitle: "فشل الاتصال بجهاز الصرف. يرجى التحقق من الاتصال.",
-          noDataToExport: "لا توجد بيانات للتصدير"
-        }
+      empty: {
+        title: "No history records found",
+        subtitle: "History will appear here once the dispenser starts operating.",
+        noMatch: "No records match your filters"
       }
     }
-  };
+  },
+  ar: {
+    dashboard: {
+      systemLogsLoading: "جارٍ تحميل سجلات النظام...",
+      recentActivityLoading: "جارٍ تحميل النشاط الأخير...",
+      errorText: "خطأ",
+      offlineText: "غير متصل"
+    },
+    medicine: {
+      emptyDrum1: "الأسطوانة 1 فارغة.",
+      emptyDrum2: "الأسطوانة 2 فارغة.",
+      errorLoadingData: "خطأ في تحميل البيانات."
+    },
+    common: {
+      selectMedicine: "اختر الدواء"
+    },
+    history: {
+      error: {
+        loadFailedTitle: "تعذر تحميل السجل",
+        loadFailedSubtitle: "فشل الاتصال بجهاز الصرف. يرجى التحقق من الاتصال."
+      },
+      loading: {
+        loadingData: "جارٍ تحميل بيانات السجل..."
+      },
+      empty: {
+        title: "لا توجد سجلات في السجل",
+        subtitle: "سيظهر السجل هنا بمجرد بدء عمل جهاز الصرف.",
+        noMatch: "لا توجد سجلات مطابقة لمرشحاتك"
+      }
+    }
+  }
+};
+
+// Language keys and state
+const LANG_KEY = 'ui_lang';
+const RTL_KEY = 'ui_dir_rtl';
+let currentLang = localStorage.getItem(LANG_KEY) || 'en';
+let isRTL = localStorage.getItem(RTL_KEY) === 'true';
+
+// Initial app bootstrap: perform first refreshes and bind schedule frequency toggles
+function initializeApp() {
+  if (window.__appInitialized) return;
+  window.__appInitialized = true;
+
+  try { refreshStatus(); } catch (_) {}
+  try { refreshLogs(); } catch (_) {}
+  try { refreshLastAction(); } catch (_) {}
+  try { loadAndDisplayMedicines(); } catch (_) {}
+  try { refreshSchedulesList(); } catch (_) {}
+  try { refreshUpcomingSchedules(); } catch (_) {}
+
+  // Event listeners for drum 1 schedule frequency
+  const scheduleFrequency1 = document.getElementById('scheduleFrequency1');
+  const onceADayOptions1 = document.getElementById('onceADayOptions1');
+  const twiceADayOptions1 = document.getElementById('twiceADayOptions1');
+  if (scheduleFrequency1 && onceADayOptions1 && twiceADayOptions1) {
+    scheduleFrequency1.addEventListener('change', function() {
+      if (this.value === 'once') {
+        onceADayOptions1.style.display = 'block';
+        twiceADayOptions1.style.display = 'none';
+      } else {
+        onceADayOptions1.style.display = 'none';
+        twiceADayOptions1.style.display = 'block';
+      }
+    });
+  }
+
+  // Event listeners for drum 2 schedule frequency
+  const scheduleFrequency2 = document.getElementById('scheduleFrequency2');
+  const onceADayOptions2 = document.getElementById('onceADayOptions2');
+  const twiceADayOptions2 = document.getElementById('twiceADayOptions2');
+  if (scheduleFrequency2 && onceADayOptions2 && twiceADayOptions2) {
+    scheduleFrequency2.addEventListener('change', function() {
+      if (this.value === 'once') {
+        onceADayOptions2.style.display = 'block';
+        twiceADayOptions2.style.display = 'none';
+      } else {
+        onceADayOptions2.style.display = 'none';
+        twiceADayOptions2.style.display = 'block';
+      }
+    });
+  }
 }
 
-// Initialize language globals if missing
-if (typeof LANG_KEY === 'undefined') { var LANG_KEY = 'ui_lang'; }
-if (typeof RTL_KEY === 'undefined') { var RTL_KEY = 'ui_dir_rtl'; }
-if (typeof currentLang === 'undefined') { var currentLang = localStorage.getItem(LANG_KEY) || 'en'; }
-if (typeof isRTL === 'undefined') { var isRTL = localStorage.getItem(RTL_KEY) === 'true'; }
-// Update DOMContentLoaded initialization to not depend on undefined globals
-window.addEventListener('DOMContentLoaded', () => {
-  applyLanguage(localStorage.getItem(LANG_KEY) || 'en');
-});
+// Clear drums API call with basic error handling
+async function clearDrums() {
+  try {
+    let res = await fetch('/clearDrums', { method: 'POST' });
+    alert(await res.text());
+    try { refreshStatus(); } catch (_) {}
+  } catch (err) {
+    alert('Error clearing drums.');
+    console.error('clearDrums error:', err);
+  }
+}
 
 function applyLanguage(lang) {
   currentLang = lang;
@@ -729,314 +552,13 @@ function setRTL(enable) {
 // Use i18n strings for dashboard error/offline states
 // In refreshStatus catch
 
-
-    async function manualDispense(drum) {
-      let pillsInput = prompt("How many pills to dispense?", 1);
-      if (pillsInput === null) return;
-      const pills = parseInt(String(pillsInput).trim(), 10);
-      if (!Number.isFinite(pills) || pills <= 0) {
-        alert('Please enter a valid positive number of pills.');
-        return;
-      }
-      try {
-        let formData = new FormData();
-        formData.append("drum", drum);
-        formData.append("pills", String(pills));
-        let res = await fetch('/manualDispense', { method: "POST", body: formData });
-        const text = await res.text();
-        if (!res.ok) {
-          alert(`Error: ${text}`);
-        } else {
-          alert(text);
-        }
-      } catch (err) {
-        alert('Error performing manual dispense.');
-        console.error('manualDispense error:', err);
-      } finally {
-        try { refreshLogs(); } catch (_) {}
-      }
-    }
-
-    async function saveSchedules() {
-        if (!confirm('Saving new schedules will perform a LOGICAL reset. You will be prompted to clear the drums and must then refill them starting from Slot 1. Are you sure you want to continue?')) {
-            return;
-        }
-
-        const frequency1 = document.getElementById('scheduleFrequency1').value;
-        const frequency2 = document.getElementById('scheduleFrequency2').value;
-
-        let scheduleData = {
-            drum1: { frequency: frequency1, times: [] },
-            drum2: { frequency: frequency2, times: [] }
-        };
-
-        const isValidTime = (t) => {
-            if (typeof t !== 'string') return false;
-            const m = t.match(/^\d{2}:\d{2}$/);
-            if (!m) return false;
-            const [hh, mm] = t.split(':').map(n => parseInt(n, 10));
-            return Number.isFinite(hh) && Number.isFinite(mm) && hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59;
-        };
-
-        if (frequency1 === 'once') {
-            const time1 = document.getElementById('onceDailyTime1').value;
-            if (!time1) return alert('Please set a time for Drum 1.');
-            if (!isValidTime(time1)) return alert('Please enter a valid time (HH:MM) for Drum 1.');
-            scheduleData.drum1.times.push(time1);
-        } else {
-            const time1_1 = document.getElementById('twiceDailyTime1_1').value;
-            const time1_2 = document.getElementById('twiceDailyTime1_2').value;
-            if (!time1_1 || !time1_2) return alert('Please set both times for Drum 1.');
-            if (!isValidTime(time1_1) || !isValidTime(time1_2)) return alert('Please enter valid times (HH:MM) for Drum 1.');
-            if (time1_1 === time1_2) return alert('Drum 1 times must be different.');
-            scheduleData.drum1.times.push(time1_1, time1_2);
-        }
-
-        if (frequency2 === 'once') {
-            const time2 = document.getElementById('onceDailyTime2').value;
-            if (!time2) return alert('Please set a time for Drum 2.');
-            if (!isValidTime(time2)) return alert('Please enter a valid time (HH:MM) for Drum 2.');
-            scheduleData.drum2.times.push(time2);
-        } else {
-            const time2_1 = document.getElementById('twiceDailyTime2_1').value;
-            const time2_2 = document.getElementById('twiceDailyTime2_2').value;
-            if (!time2_1 || !time2_2) return alert('Please set both times for Drum 2.');
-            if (!isValidTime(time2_1) || !isValidTime(time2_2)) return alert('Please enter valid times (HH:MM) for Drum 2.');
-            if (time2_1 === time2_2) return alert('Drum 2 times must be different.');
-            scheduleData.drum2.times.push(time2_1, time2_2);
-        }
-
-        let formData = new FormData();
-        formData.append("data", JSON.stringify(scheduleData));
-
-        try {
-            let res = await fetch('/setDailySchedules', { method: "POST", body: formData });
-            const text = await res.text();
-            if (!res.ok) {
-                alert(`Error: ${text}`);
-            } else {
-                alert(text);
-                await clearDrums();
-            }
-        } catch (err) {
-            alert('Error saving schedules.');
-            console.error('saveSchedules error:', err);
-        }
-    }
-
-
-
-
-    // Initial load
-    function initializeApp() {
-        if (window.__appInitialized) return;
-        window.__appInitialized = true;
-        refreshStatus();
-        refreshLogs();
-        refreshLastAction();
-        loadAndDisplayMedicines(); // This will fetch data and then update the relevant UI parts
-        refreshSchedulesList();
-        refreshUpcomingSchedules();
-
-        // Event listeners for drum 1 schedule frequency
-        const scheduleFrequency1 = document.getElementById('scheduleFrequency1');
-        const onceADayOptions1 = document.getElementById('onceADayOptions1');
-        const twiceADayOptions1 = document.getElementById('twiceADayOptions1');
-
-        scheduleFrequency1.addEventListener('change', function() {
-            if (this.value === 'once') {
-                onceADayOptions1.style.display = 'block';
-                twiceADayOptions1.style.display = 'none';
-            } else {
-                onceADayOptions1.style.display = 'none';
-                twiceADayOptions1.style.display = 'block';
-            }
-        });
-
-        // Event listeners for drum 2 schedule frequency
-        const scheduleFrequency2 = document.getElementById('scheduleFrequency2');
-        const onceADayOptions2 = document.getElementById('onceADayOptions2');
-        const twiceADayOptions2 = document.getElementById('twiceADayOptions2');
-
-        scheduleFrequency2.addEventListener('change', function() {
-            if (this.value === 'once') {
-                onceADayOptions2.style.display = 'block';
-                twiceADayOptions2.style.display = 'none';
-            } else {
-                onceADayOptions2.style.display = 'none';
-                twiceADayOptions2.style.display = 'block';
-            }
-        });
-    }
-
-    async function clearDrums() {
-        try {
-            let res = await fetch('/clearDrums', { method: 'POST' });
-            alert(await res.text());
-            refreshStatus();
-        } catch (err) {
-            alert('Error clearing drums.');
-        }
-    }
-
-    initializeApp();
-
 // Use i18n for medicine error loading messages
 // In loadAndDisplayMedicines catch
 // document.getElementById('medicinesList1').innerHTML = '<div class="empty-list" style="color: red;">Error loading data.</div>';
 // document.getElementById('medicinesList2').innerHTML = '<div class="empty-list" style="color: red;">Error loading data.</div>';
 
 
-    async function manualDispense(drum) {
-      let pillsInput = prompt("How many pills to dispense?", 1);
-      if (pillsInput === null) return;
-      const pills = parseInt(String(pillsInput).trim(), 10);
-      if (!Number.isFinite(pills) || pills <= 0) {
-        alert('Please enter a valid positive number of pills.');
-        return;
-      }
-      try {
-        let formData = new FormData();
-        formData.append("drum", drum);
-        formData.append("pills", String(pills));
-        let res = await fetch('/manualDispense', { method: "POST", body: formData });
-        const text = await res.text();
-        if (!res.ok) {
-          alert(`Error: ${text}`);
-        } else {
-          alert(text);
-        }
-      } catch (err) {
-        alert('Error performing manual dispense.');
-        console.error('manualDispense error:', err);
-      } finally {
-        try { refreshLogs(); } catch (_) {}
-      }
-    }
 
-    async function saveSchedules() {
-        if (!confirm('Saving new schedules will perform a LOGICAL reset. You will be prompted to clear the drums and must then refill them starting from Slot 1. Are you sure you want to continue?')) {
-            return;
-        }
-
-        const frequency1 = document.getElementById('scheduleFrequency1').value;
-        const frequency2 = document.getElementById('scheduleFrequency2').value;
-
-        let scheduleData = {
-            drum1: { frequency: frequency1, times: [] },
-            drum2: { frequency: frequency2, times: [] }
-        };
-
-        const isValidTime = (t) => {
-            if (typeof t !== 'string') return false;
-            const m = t.match(/^\d{2}:\d{2}$/);
-            if (!m) return false;
-            const [hh, mm] = t.split(':').map(n => parseInt(n, 10));
-            return Number.isFinite(hh) && Number.isFinite(mm) && hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59;
-        };
-
-        if (frequency1 === 'once') {
-            const time1 = document.getElementById('onceDailyTime1').value;
-            if (!time1) return alert('Please set a time for Drum 1.');
-            if (!isValidTime(time1)) return alert('Please enter a valid time (HH:MM) for Drum 1.');
-            scheduleData.drum1.times.push(time1);
-        } else {
-            const time1_1 = document.getElementById('twiceDailyTime1_1').value;
-            const time1_2 = document.getElementById('twiceDailyTime1_2').value;
-            if (!time1_1 || !time1_2) return alert('Please set both times for Drum 1.');
-            if (!isValidTime(time1_1) || !isValidTime(time1_2)) return alert('Please enter valid times (HH:MM) for Drum 1.');
-            if (time1_1 === time1_2) return alert('Drum 1 times must be different.');
-            scheduleData.drum1.times.push(time1_1, time1_2);
-        }
-
-        if (frequency2 === 'once') {
-            const time2 = document.getElementById('onceDailyTime2').value;
-            if (!time2) return alert('Please set a time for Drum 2.');
-            if (!isValidTime(time2)) return alert('Please enter a valid time (HH:MM) for Drum 2.');
-            scheduleData.drum2.times.push(time2);
-        } else {
-            const time2_1 = document.getElementById('twiceDailyTime2_1').value;
-            const time2_2 = document.getElementById('twiceDailyTime2_2').value;
-            if (!time2_1 || !time2_2) return alert('Please set both times for Drum 2.');
-            if (!isValidTime(time2_1) || !isValidTime(time2_2)) return alert('Please enter valid times (HH:MM) for Drum 2.');
-            if (time2_1 === time2_2) return alert('Drum 2 times must be different.');
-            scheduleData.drum2.times.push(time2_1, time2_2);
-        }
-
-        let formData = new FormData();
-        formData.append("data", JSON.stringify(scheduleData));
-
-        try {
-            let res = await fetch('/setDailySchedules', { method: "POST", body: formData });
-            const text = await res.text();
-            if (!res.ok) {
-                alert(`Error: ${text}`);
-            } else {
-                alert(text);
-                await clearDrums();
-            }
-        } catch (err) {
-            alert('Error saving schedules.');
-            console.error('saveSchedules error:', err);
-        }
-    }
-
-
-
-
-    // Initial load
-    function initializeApp() {
-        if (window.__appInitialized) return;
-        window.__appInitialized = true;
-        refreshStatus();
-        refreshLogs();
-        refreshLastAction();
-        loadAndDisplayMedicines(); // This will fetch data and then update the relevant UI parts
-        refreshSchedulesList();
-        refreshUpcomingSchedules();
-
-        // Event listeners for drum 1 schedule frequency
-        const scheduleFrequency1 = document.getElementById('scheduleFrequency1');
-        const onceADayOptions1 = document.getElementById('onceADayOptions1');
-        const twiceADayOptions1 = document.getElementById('twiceADayOptions1');
-
-        scheduleFrequency1.addEventListener('change', function() {
-            if (this.value === 'once') {
-                onceADayOptions1.style.display = 'block';
-                twiceADayOptions1.style.display = 'none';
-            } else {
-                onceADayOptions1.style.display = 'none';
-                twiceADayOptions1.style.display = 'block';
-            }
-        });
-
-        // Event listeners for drum 2 schedule frequency
-        const scheduleFrequency2 = document.getElementById('scheduleFrequency2');
-        const onceADayOptions2 = document.getElementById('onceADayOptions2');
-        const twiceADayOptions2 = document.getElementById('twiceADayOptions2');
-
-        scheduleFrequency2.addEventListener('change', function() {
-            if (this.value === 'once') {
-                onceADayOptions2.style.display = 'block';
-                twiceADayOptions2.style.display = 'none';
-            } else {
-                onceADayOptions2.style.display = 'none';
-                twiceADayOptions2.style.display = 'block';
-            }
-        });
-    }
-
-    async function clearDrums() {
-        try {
-            let res = await fetch('/clearDrums', { method: 'POST' });
-            alert(await res.text());
-            refreshStatus();
-        } catch (err) {
-            alert('Error clearing drums.');
-        }
-    }
-
-    initializeApp();
 
 // Use i18n for medicine error loading messages
 // In loadAndDisplayMedicines catch

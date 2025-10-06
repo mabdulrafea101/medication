@@ -32,6 +32,10 @@ unsigned long emptyDisplayUntil[2] = {0, 0};      // Timeout for empty drum disp
 String lastOled1Content = "";
 String lastOled2Content = "";
 
+// Time update tracking
+unsigned long lastTimeUpdate = 0;
+const unsigned long TIME_UPDATE_INTERVAL = 5000; // Update every 5 seconds
+
 // ---------------------- Logging Macros ----------------------
 #define logInfo(msg) Serial.println(String("[INFO] ") + msg)
 #define logError(msg) Serial.println(String("[ERROR] ") + msg)
@@ -47,9 +51,9 @@ RTC_DS3231 rtc;
 DNSServer dnsServer;
 SemaphoreHandle_t i2c_mutex;
 
-// OLEDs
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C oled1(U8G2_R0, U8X8_PIN_NONE);
-U8G2_SSD1306_128X64_NONAME_F_SW_I2C oled2(U8G2_R0, 13, 17, U8X8_PIN_NONE);
+// OLEDs with explicit I2C addresses
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C oled1(U8G2_R0, U8X8_PIN_NONE, 22, 21); // Hardware I2C on pins 21(SDA), 22(SCL)
+U8G2_SSD1306_128X64_NONAME_F_SW_I2C oled2(U8G2_R0, 13, 17, U8X8_PIN_NONE); // Software I2C on pins 17(SDA), 13(SCL)
 
 // ---------------------- Stepper ----------------------
 AccelStepper stepper1(AccelStepper::HALF4WIRE, 14, 26, 27, 25);
@@ -158,6 +162,8 @@ void checkSchedules();
 void loadSlotMap();
 String getPillName(int drum, int slot);
 String getPillNameForSlot(int drum, int slot);
+bool updateOledDisplay(int drum, const String &line1, const String &line2);
+void showErrorOnOled(int drum, const String &errorMsg);
 void dispensePill(int drum, int pills = 1);
 void logEvent(String eventMessage, bool updateLastAction);
 void startBuzzerGradual();
@@ -231,6 +237,17 @@ void loop()
     if (currentState == IDLE)
     {
         checkSchedules();
+        
+        // Update OLED displays with current time every 5 seconds
+        if (millis() - lastTimeUpdate >= TIME_UPDATE_INTERVAL)
+        {
+            lastTimeUpdate = millis();
+            // Only update if not showing other messages (buzzer not active, no pending confirmation)
+            if (!buzzerActive && takenDisplayUntil == 0)
+            {
+                updateOledsWithNextSchedule();
+            }
+        }
     }
 
     if (currentState == IDLE && pendingDispenseDrum != 0)
@@ -337,29 +354,83 @@ void initIO()
     pinMode(buzzerPin, OUTPUT);
     pinMode(buttonPin, INPUT_PULLUP);
 }
+// I2C Scanner function for debugging
+void scanI2C() {
+    logInfo("Scanning I2C bus...");
+    int deviceCount = 0;
+    
+    for (byte address = 1; address < 127; address++) {
+        Wire.beginTransmission(address);
+        byte error = Wire.endTransmission();
+        
+        if (error == 0) {
+            logInfo("I2C device found at address 0x" + String(address, HEX));
+            deviceCount++;
+        }
+    }
+    
+    if (deviceCount == 0) {
+        logError("No I2C devices found!");
+    } else {
+        logInfo("Found " + String(deviceCount) + " I2C device(s)");
+    }
+}
+
 void initRTC()
 {
-    if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(2000)) == pdTRUE)
+    // Initialize I2C with explicit pins
+    Wire.begin(21, 22); // SDA=21, SCL=22 for ESP32
+    Wire.setClock(100000); // Set I2C clock to 100kHz for better stability
+    
+    // Scan I2C bus for debugging
+    scanI2C();
+    
+    if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(3000)) == pdTRUE)
     {
-        if (!rtc.begin())
-        {
-            logError("RTC not found.");
+        logInfo("Attempting to initialize RTC...");
+        
+        // Try multiple times to initialize RTC
+        bool rtcFound = false;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            if (rtc.begin()) {
+                rtcFound = true;
+                logInfo("RTC initialized successfully on attempt " + String(attempt + 1));
+                break;
+            }
+            delay(500);
+        }
+        
+        if (!rtcFound) {
+            logError("RTC not found after multiple attempts. Check wiring and I2C address.");
             xSemaphoreGive(i2c_mutex);
             return;
         }
 
         bool rtcInitialized = preferences.getBool("rtcInit", false);
         DateTime now = rtc.now();
-        bool invalidTime = (now.year() < 2020);
+        bool invalidTime = (now.year() < 2020 || now.year() > 2030);
 
-        if (!rtcInitialized || invalidTime)
-        {
-            logInfo("Setting RTC to compile time.");
+        if (!rtcInitialized || invalidTime) {
+            logInfo("Setting RTC to compile time: " + String(__DATE__) + " " + String(__TIME__));
             rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
             preferences.putBool("rtcInit", true);
+            
+            // Verify the time was set correctly
+            delay(100);
+            DateTime verifyTime = rtc.now();
+            logInfo("RTC time set to: " + String(verifyTime.year()) + "-" + 
+                   String(verifyTime.month()) + "-" + String(verifyTime.day()) + " " +
+                   String(verifyTime.hour()) + ":" + String(verifyTime.minute()) + ":" + String(verifyTime.second()));
+        } else {
+            DateTime currentTime = rtc.now();
+            logInfo("RTC already initialized. Current time: " + String(currentTime.year()) + "-" + 
+                   String(currentTime.month()) + "-" + String(currentTime.day()) + " " +
+                   String(currentTime.hour()) + ":" + String(currentTime.minute()) + ":" + String(currentTime.second()));
         }
 
         xSemaphoreGive(i2c_mutex);
+    } else {
+        logError("Could not acquire I2C mutex for RTC initialization");
     }
 }
 DateTime getRTCTime()
@@ -379,36 +450,57 @@ DateTime getRTCTime()
 }
 void initOLEDs()
 {
-    if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(2000)) == pdTRUE)
+    logInfo("Initializing OLED displays...");
+    
+    // Initialize OLED1 (Hardware I2C) with mutex protection
+    if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(3000)) == pdTRUE)
     {
-        if (oled1.begin())
-        {
+        bool oled1Success = false;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            if (oled1.begin()) {
+                oled1Success = true;
+                logInfo("OLED1 initialized successfully on attempt " + String(attempt + 1));
+                break;
+            }
+            delay(200);
+        }
+        
+        if (!oled1Success) {
+            logError("OLED1 not found after multiple attempts. Check wiring and I2C address (should be 0x3C).");
+        } else {
             oled1.clearBuffer();
             oled1.setFont(u8g2_font_ncenB08_tr);
-            oled1.drawStr(0, 20, "Drum 1 Initializing");
+            oled1.drawStr(0, 15, "Drum 1 Ready");
+            oled1.drawStr(0, 30, "Initializing...");
             oled1.sendBuffer();
         }
-        else
-        {
-            logError("OLED1 init failed.");
-        }
         xSemaphoreGive(i2c_mutex);
+    } else {
+        logError("Could not acquire I2C mutex for OLED1 initialization");
     }
-    if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(2000)) == pdTRUE)
-    {
-        if (oled2.begin())
-        {
-            oled2.clearBuffer();
-            oled2.setFont(u8g2_font_ncenB08_tr);
-            oled2.drawStr(0, 20, "Drum 2 Initializing");
-            oled2.sendBuffer();
+
+    // Initialize OLED2 (Software I2C) - no mutex needed
+    bool oled2Success = false;
+    for (int attempt = 0; attempt < 3; attempt++) {
+        if (oled2.begin()) {
+            oled2Success = true;
+            logInfo("OLED2 initialized successfully on attempt " + String(attempt + 1));
+            break;
         }
-        else
-        {
-            logError("OLED2 init failed.");
-        }
-        xSemaphoreGive(i2c_mutex);
+        delay(200);
     }
+    
+    if (!oled2Success) {
+        logError("OLED2 not found after multiple attempts. Check wiring and I2C address (should be 0x3D).");
+    } else {
+        oled2.clearBuffer();
+        oled2.setFont(u8g2_font_ncenB08_tr);
+        oled2.drawStr(0, 15, "Drum 2 Ready");
+        oled2.drawStr(0, 30, "Initializing...");
+        oled2.sendBuffer();
+    }
+    
+    logInfo("OLED initialization complete");
 }
 
 // ---------------------- Web Server ----------------------
@@ -454,6 +546,86 @@ void initWebServer()
 
     server.on("/logs", HTTP_GET, [](AsyncWebServerRequest *request)
               { request->send(SPIFFS, "/log.txt", "text/plain"); });
+
+    // Structured history API for history.html
+    server.on("/api/history", HTTP_GET, [](AsyncWebServerRequest *request)
+              {
+        File f = SPIFFS.open("/log.txt", FILE_READ);
+        const int MAX_ITEMS = 300; // limit to last N entries to keep response reasonable
+        String lines[MAX_ITEMS];
+        int count = 0;
+        if (f) {
+            while (f.available()) {
+                String line = f.readStringUntil('\n');
+                line.trim();
+                if (line.length() == 0) continue;
+                lines[count % MAX_ITEMS] = line;
+                count++;
+            }
+            f.close();
+        }
+        int total = count < MAX_ITEMS ? count : MAX_ITEMS;
+        int start = (count > MAX_ITEMS) ? (count % MAX_ITEMS) : 0;
+        String out = "[";
+        bool first = true;
+        for (int i = 0; i < total; i++) {
+            String line = lines[(start + i) % MAX_ITEMS];
+            int closeBracket = line.indexOf(']');
+            int openBracket = line.indexOf('[');
+            if (openBracket == 0 && closeBracket > 0 && closeBracket + 2 <= (int)line.length()) {
+                String ts = line.substring(openBracket + 1, closeBracket);
+                String msg = line.substring(closeBracket + 2);
+                appendHistoryItemJson(out, ts, msg, first);
+            }
+        }
+        out += "]";
+        request->send(200, "application/json", out); });
+
+    // API endpoint for upcoming schedules (dashboard)
+    server.on("/api/upcoming-schedules", HTTP_GET, [](AsyncWebServerRequest *request)
+              {
+        DateTime now = rtc.now();
+        StaticJsonDocument<1024> doc;
+        JsonArray schedules = doc.to<JsonArray>();
+        
+        // Find upcoming schedules for today and tomorrow
+        for (int day = 0; day < 2; day++) {
+            DateTime targetDate = now + TimeSpan(day, 0, 0, 0);
+            
+            for (int i = 0; i < dailyScheduleCount; i++) {
+                // For today, only show future schedules; for tomorrow, show all
+                bool isToday = (day == 0);
+                bool isFuture = (dailySchedules[i].hour > now.hour()) || 
+                               (dailySchedules[i].hour == now.hour() && dailySchedules[i].minute > now.minute());
+                bool shouldInclude = !isToday || (isFuture && !dailySchedules[i].executed_today);
+                
+                if (shouldInclude) {
+                    JsonObject schedule = schedules.createNestedObject();
+                    schedule["drum"] = dailySchedules[i].drum;
+                    schedule["hour"] = dailySchedules[i].hour;
+                    schedule["minute"] = dailySchedules[i].minute;
+                    schedule["pills"] = dailySchedules[i].pills;
+                    schedule["executed"] = dailySchedules[i].executed_today;
+                    schedule["medicine"] = getPillName(dailySchedules[i].drum, 
+                                                     (dailySchedules[i].drum == 1) ? currentSlotDrum1 : currentSlotDrum2);
+                    
+                    // Format date and time
+                    char dateStr[11];
+                    sprintf(dateStr, "%04d-%02d-%02d", targetDate.year(), targetDate.month(), targetDate.day());
+                    schedule["date"] = dateStr;
+                    
+                    char timeStr[6];
+                    sprintf(timeStr, "%02d:%02d", dailySchedules[i].hour, dailySchedules[i].minute);
+                    schedule["time"] = timeStr;
+                    
+                    schedule["day"] = day; // 0 = today, 1 = tomorrow
+                }
+            }
+        }
+        
+        String json;
+        serializeJson(doc, json);
+        request->send(200, "application/json", json); });
 
     server.on("/addSlotMapEntry", HTTP_POST, [](AsyncWebServerRequest *request)
               {
@@ -966,7 +1138,94 @@ void stopBuzzer()
     noTone(buzzerPin);
 }
 
-// ... existing code ...
+// Helper to append one history item JSON object to an output string
+static void appendHistoryItemJson(String &out, const String &timestampRaw, const String &message, bool &first)
+{
+    // Convert "YYYY-MM-DD HH:MM:SS" to ISO-like "YYYY-MM-DDTHH:MM:SS"
+    String isoTs = timestampRaw;
+    isoTs.replace(' ', 'T');
+
+    String event = "";
+    String medicine = "";
+    int drum = -1;
+    int slot = -1;
+    String details = "";
+
+    if (message.startsWith("MISSED: ")) {
+        event = "MISSED";
+        int fromIdx = message.indexOf(" from Drum ");
+        if (fromIdx > 0) {
+            medicine = message.substring(8, fromIdx);
+            drum = message.substring(fromIdx + 11).toInt();
+        } else {
+            medicine = message.substring(8);
+        }
+    } else if (message.startsWith("TAKEN: ")) {
+        event = "TAKEN";
+        int fromIdx = message.indexOf(" from Drum ");
+        if (fromIdx > 0) {
+            medicine = message.substring(8, fromIdx);
+            drum = message.substring(fromIdx + 11).toInt();
+        } else {
+            medicine = message.substring(8);
+        }
+    } else if (message.startsWith("DISPENSED: ")) {
+        event = "DISPENSED";
+        int fromIdx = message.indexOf(" from Drum ");
+        int slotIdx = message.indexOf(" Slot ");
+        if (fromIdx > 0) {
+            medicine = message.substring(11, fromIdx);
+            if (slotIdx > 0) {
+                drum = message.substring(fromIdx + 11, slotIdx).toInt();
+                slot = message.substring(slotIdx + 6).toInt();
+            } else {
+                drum = message.substring(fromIdx + 11).toInt();
+            }
+        } else {
+            medicine = message.substring(11);
+        }
+    } else if (message.startsWith("Removed medicine")) {
+        event = "Removed";
+        // Example: "Removed medicine from Drum X, Slot Y"
+        int drumIdx = message.indexOf("Drum ");
+        int commaIdx = message.indexOf(", Slot ");
+        if (drumIdx > 0) {
+            if (commaIdx > drumIdx) {
+                drum = message.substring(drumIdx + 5, commaIdx).toInt();
+                slot = message.substring(commaIdx + 7).toInt();
+            } else {
+                drum = message.substring(drumIdx + 5).toInt();
+            }
+        }
+        details = message;
+    } else if (message.startsWith("Drums logically reset")) {
+        event = "Reset";
+        details = message;
+    } else if (message.startsWith("Daily schedules updated")) {
+        event = "SchedulesUpdated";
+        details = message;
+    } else {
+        // Fallback: use entire message as event
+        event = message;
+    }
+
+    StaticJsonDocument<256> itemDoc;
+    itemDoc["timestamp"] = isoTs;
+    itemDoc["event"] = event;
+    if (medicine.length() > 0) itemDoc["medicine"] = medicine; else itemDoc["medicine"] = "";
+    if (drum >= 0) itemDoc["drum"] = drum; else itemDoc["drum"] = nullptr;
+    if (slot >= 0) itemDoc["slot"] = slot; else itemDoc["slot"] = nullptr;
+    if (details.length() > 0) itemDoc["details"] = details; else itemDoc["details"] = "";
+
+    String itemJson;
+    serializeJson(itemDoc, itemJson);
+    if (!first) {
+        out += ",";
+    } else {
+        first = false;
+    }
+    out += itemJson;
+}
 
 void showTakenOnOled(int drum, const String &pill)
 {
@@ -1017,98 +1276,62 @@ void showTakenOnOled(int drum, const String &pill)
     }
 }
 
-// ... existing code ...
-// ... existing code ...
+String getPillNameForSlot(int drum, int slot)
+{
+    return getPillName(drum, slot);
+}
 
-// Helper function to update OLED display only if content has changed
 bool updateOledDisplay(int drum, const String &line1, const String &line2)
 {
-    String content = line1 + line2;
-    bool contentChanged = false;
-
-    if (drum == 1)
-    {
-        contentChanged = (content != lastOled1Content);
-        lastOled1Content = content;
+    String newContent = line1 + "|" + line2;
+    String *lastContent = (drum == 1) ? &lastOled1Content : &lastOled2Content;
+    
+    // Only update if content has changed
+    if (newContent == *lastContent) {
+        return true; // No update needed, but not an error
     }
-    else
-    {
-        contentChanged = (content != lastOled2Content);
-        lastOled2Content = content;
-    }
-
-    if (!contentChanged)
-    {
-        return true; // No need to update, consider it successful
-    }
-
-    bool displaySuccess = false;
+    
+    bool success = false;
     int retryCount = 0;
-
-    while (!displaySuccess && retryCount < 3)
-    {
-        if (drum == 1)
-        {
-            if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(1000)) == pdTRUE)
-            {
+    
+    while (!success && retryCount < 3) {
+        if (drum == 1) {
+            if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(1000)) == pdTRUE) {
                 oled1.clearBuffer();
                 oled1.setFont(u8g2_font_ncenB08_tr);
                 oled1.drawStr(0, 20, line1.c_str());
                 oled1.drawStr(0, 40, line2.c_str());
                 oled1.sendBuffer();
                 xSemaphoreGive(i2c_mutex);
-                displaySuccess = true;
+                success = true;
             }
+        } else {
+            oled2.clearBuffer();
+            oled2.setFont(u8g2_font_ncenB08_tr);
+            oled2.drawStr(0, 20, line1.c_str());
+            oled2.drawStr(0, 40, line2.c_str());
+            oled2.sendBuffer();
+            success = true;
         }
-        else
-        {
-            if (xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(1000)) == pdTRUE)
-            {
-                oled2.clearBuffer();
-                oled2.setFont(u8g2_font_ncenB08_tr);
-                oled2.drawStr(0, 20, line1.c_str());
-                oled2.drawStr(0, 40, line2.c_str());
-                oled2.sendBuffer();
-                xSemaphoreGive(i2c_mutex);
-                displaySuccess = true;
-            }
-        }
-
-        if (!displaySuccess)
-        {
+        
+        if (!success) {
             retryCount++;
-            delay(50); // Short delay before retry
+            delay(50);
         }
     }
-
-    if (!displaySuccess)
-    {
+    
+    if (success) {
+        *lastContent = newContent;
+    } else {
         logError("Failed to update OLED " + String(drum) + " after multiple attempts");
     }
-
-    return displaySuccess;
+    
+    return success;
 }
 
-// Function to display error messages on OLED
 void showErrorOnOled(int drum, const String &errorMsg)
 {
-    String line1 = "Error:";
-    String line2 = errorMsg.substring(0, 15); // Limit to 15 chars
-    updateOledDisplay(drum, line1, line2);
-}
-
-// Function to get the pill name for a specific drum and slot
-String getPillNameForSlot(int drum, int slot)
-{
-    // Search through the slotMap to find the matching entry
-    for (int i = 0; i < slotMapCount; i++)
-    {
-        if (slotMap[i].drum == drum && slotMap[i].slot == slot)
-        {
-            return slotMap[i].pillName;
-        }
-    }
-    return "Empty"; // Default if not found
+    updateOledDisplay(drum, "Error:", errorMsg.substring(0, 15));
 }
 
 void showEmptyOnOled(int drum)
@@ -1123,13 +1346,20 @@ void showEmptyOnOled(int drum)
     updateOledDisplay(drum, line1, line2);
 }
 
-// ... existing code ...
-
 void updateOledsWithNextSchedule()
 {
     if (takenDisplayUntil != 0 && millis() < takenDisplayUntil)
         return;
     DateTime now = getRTCTime();
+    
+    // Format current time as HH:MM:SS
+    String currentTime = "";
+    if (now.hour() < 10) currentTime += "0";
+    currentTime += String(now.hour()) + ":";
+    if (now.minute() < 10) currentTime += "0";
+    currentTime += String(now.minute()) + ":";
+    if (now.second() < 10) currentTime += "0";
+    currentTime += String(now.second());
 
     for (int d = 1; d <= 2; d++)
     {
@@ -1182,7 +1412,7 @@ void updateOledsWithNextSchedule()
             }
         }
 
-        String line2 = "None Scheduled";
+        String line2 = "None";
         if (scheduleFound)
         {
             char timeBuf[6];
@@ -1190,7 +1420,9 @@ void updateOledsWithNextSchedule()
             line2 = String(timeBuf);
         }
 
-        String line1 = "Drum " + String(d) + " Next:";
+        // Display current time and next schedule
+        String line1 = "Time: " + currentTime;
+        line2 = "Next: " + line2;
 
         // Use our helper function to update the display only if content has changed
         updateOledDisplay(d, line1, line2);
