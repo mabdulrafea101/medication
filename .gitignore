@@ -9,3 +9,4 @@
 
 # Keep the data directory and all of its contents
 !/data/
+!/data/**
