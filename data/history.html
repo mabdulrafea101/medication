@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <title>Medicine Dispenser - History</title>
   <meta charset="UTF-8">
@@ -76,8 +76,8 @@
     /* --- Filter Section --- */
     .filters {
       background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
       border-radius: 20px;
       padding: 1.5rem;
       margin-bottom: 1.5rem;
@@ -130,8 +130,8 @@
     .filter-btn {
       padding: 0.5rem 1rem;
       background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
       border: 2px solid rgba(255,255,255,0.2);
       border-radius: 12px;
       cursor: pointer;
@@ -219,8 +219,8 @@
     /* --- History Table --- */
     .history-section {
       background: rgba(255, 255, 255, 0.95);
-      backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
       border-radius: 20px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.1);
       border: 1px solid rgba(255,255,255,0.2);
@@ -304,8 +304,8 @@
       border-bottom: 2px solid rgba(0,0,0,0.05);
       position: sticky;
       top: 0;
-      backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
     }
 
     /* RTL table alignment */
@@ -453,12 +453,24 @@
         min-width: 80px;
       }
     }
+
+    /* Utility classes for common inline styles */
+    .icon-large {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+
+    .text-muted {
+      font-size: 0.9rem;
+      color: #999;
+      margin-top: 0.5rem;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <!-- Header -->
-    <div class="header" style="position: relative;">
+    <div class="header">
       <a href="index.html" class="back-button">
         <span>←</span>
         <span data-i18n="history.backToMain">Back to Main</span>
@@ -559,9 +571,9 @@
 
       <!-- Empty State -->
       <div id="emptyState" class="empty-state" style="display: none;">
-        <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
+        <div class="icon-large">📭</div>
         <div><span data-i18n="history.empty.title">No history records found</span></div>
-        <div style="font-size: 0.9rem; color: #999; margin-top: 0.5rem;">
+        <div class="text-muted">
           <span data-i18n="history.empty.subtitle">History will appear here once the dispenser starts operating.</span>
         </div>
       </div>
@@ -656,9 +668,9 @@
           emptyState.style.display = 'block';
           const dict = (i18n[currentLang] && i18n[currentLang].history) || i18n.en.history;
           emptyState.innerHTML = `
-            <div style="font-size: 3rem; margin-bottom: 1rem;">🔌</div>
+            <div class="icon-large">🔌</div>
             <div>${dict.error.loadFailedTitle}</div>
-            <div style="font-size: 0.9rem; color: #999; margin-top: 0.5rem;">
+            <div class="text-muted">
               ${dict.error.loadFailedSubtitle}
             </div>
           `;
@@ -759,14 +771,14 @@
         emptyState.style.display = 'block';
         if (historyData.length > 0) {
             emptyState.innerHTML = `
-                <div style="font-size: 3rem; margin-bottom: 1rem;">🔍</div>
+                <div class="icon-large">🔍</div>
                 <div>${dict.empty.noMatch}</div>
             `;
         } else {
             emptyState.innerHTML = `
-                <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
+                <div class="icon-large">📭</div>
                 <div>${dict.empty.title}</div>
-                <div style="font-size: 0.9rem; color: #999; margin-top: 0.5rem;">
+                <div class="text-muted">
                   ${dict.empty.subtitle}
                 </div>
             `;

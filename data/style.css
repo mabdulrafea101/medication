@@ -34,6 +34,7 @@ h1 {
     margin: 0;
     background: linear-gradient(135deg, #667eea, #764ba2);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
@@ -447,6 +448,7 @@ select {
     transition: all 0.3s ease;
     font-family: inherit;
     -webkit-appearance: none; /* Remove default mobile styling */
+    appearance: none;
 }
 
 input:focus,
@@ -756,8 +758,8 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
 /* Remove default number spinners for a cleaner look */
 
 input[type="number"].count-input {
-  appearance: auto;
   -moz-appearance: textfield;
+  appearance: auto;
 }
 /* RTL Support */
 body.rtl {
@@ -805,4 +807,27 @@ body.rtl #scheduleGuardNotice {
 body.rtl .warning-block {
   border-left: none;
   border-right: 4px solid #ffc107;
+}
+
+/* Language toggle positioning */
+.lang-toggle {
+  margin-top: 0.5rem;
+}
+
+/* Utility classes for common inline styles */
+.text-muted-description {
+  color: #666;
+  margin-bottom: 1.5rem;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.margin-bottom-1-5 {
+  margin-bottom: 1.5rem;
+}
+
+.margin-top-1 {
+  margin-top: 1rem;
 }

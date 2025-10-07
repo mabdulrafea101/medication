@@ -521,7 +521,7 @@ void initWebServer()
         char timeBuf[20];
         snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
         
-        StaticJsonDocument<256> doc;
+        JsonDocument doc;
         doc["time"] = timeBuf;
         doc["slotDrum1"] = currentSlotDrum1;
         doc["slotDrum2"] = currentSlotDrum2;
@@ -533,9 +533,9 @@ void initWebServer()
 
     server.on("/getSlotMap", HTTP_GET, [](AsyncWebServerRequest *request)
               {
-        StaticJsonDocument<1024> doc;
+        JsonDocument doc;
         for (int i = 0; i < slotMapCount; i++) {
-            JsonObject obj = doc.createNestedObject();
+            JsonObject obj = doc.add<JsonObject>();
             obj["drum"] = slotMap[i].drum;
             obj["slot"] = slotMap[i].slot;
             obj["pillName"] = slotMap[i].pillName;
@@ -585,7 +585,7 @@ void initWebServer()
     server.on("/api/upcoming-schedules", HTTP_GET, [](AsyncWebServerRequest *request)
               {
         DateTime now = rtc.now();
-        StaticJsonDocument<1024> doc;
+        JsonDocument doc;
         JsonArray schedules = doc.to<JsonArray>();
         
         // Find upcoming schedules for today and tomorrow
@@ -600,7 +600,7 @@ void initWebServer()
                 bool shouldInclude = !isToday || (isFuture && !dailySchedules[i].executed_today);
                 
                 if (shouldInclude) {
-                    JsonObject schedule = schedules.createNestedObject();
+                    JsonObject schedule = schedules.add<JsonObject>();
                     schedule["drum"] = dailySchedules[i].drum;
                     schedule["hour"] = dailySchedules[i].hour;
                     schedule["minute"] = dailySchedules[i].minute;
@@ -629,11 +629,11 @@ void initWebServer()
 
     server.on("/api/dispenser-status", HTTP_GET, [](AsyncWebServerRequest *request)
               {
-        StaticJsonDocument<1024> doc;
+        JsonDocument doc;
         JsonArray drums = doc.createNestedArray("drums");
         
         for (int drum = 1; drum <= 2; drum++) {
-            JsonObject drumObj = drums.createNestedObject();
+            JsonObject drumObj = drums.add<JsonObject>();
             drumObj["drum"] = drum;
             drumObj["currentSlot"] = (drum == 1) ? currentSlotDrum1 : currentSlotDrum2;
             drumObj["isEmpty"] = drumIsEffectivelyEmpty[drum - 1];
@@ -643,7 +643,7 @@ void initWebServer()
             int totalSlots = 7;
             
             for (int slot = 1; slot <= 7; slot++) {
-                JsonObject slotObj = slots.createNestedObject();
+                JsonObject slotObj = slots.add<JsonObject>();
                 slotObj["slot"] = slot;
                 String pillName = getPillName(drum, slot);
                 slotObj["medicine"] = pillName;
@@ -702,7 +702,7 @@ void initWebServer()
               {
         if (request->hasParam("data", true)) {
             String data = request->getParam("data", true)->value();
-            StaticJsonDocument<512> doc;
+            JsonDocument doc;
             if (deserializeJson(doc, data).code() == DeserializationError::Ok) {
                 dailyScheduleCount = 0;
                 // Clear existing schedules before adding new ones
@@ -733,7 +733,7 @@ void initWebServer()
 
     server.on("/lastAction", HTTP_GET, [](AsyncWebServerRequest *request)
               {
-        StaticJsonDocument<256> doc;
+        JsonDocument doc;
         doc["timestamp"] = lastAction.timestamp;
         doc["event"] = lastAction.event;
         String jsonBuf;
@@ -744,7 +744,7 @@ void initWebServer()
               {
         if (request->hasParam("data", true)) {
             String data = request->getParam("data", true)->value();
-            StaticJsonDocument<512> doc;
+            JsonDocument doc;
             if (deserializeJson(doc, data).code() == DeserializationError::Ok) {
                 int drum = doc["drum"].as<int>();
                 JsonArray medicines = doc["medicines"].as<JsonArray>();
@@ -979,7 +979,7 @@ void loadSchedules()
         logError("Failed to open schedules.json for reading.");
         return;
     }
-    StaticJsonDocument<512> doc;
+    JsonDocument doc;
     DeserializationError error = deserializeJson(doc, file);
     if (error)
     {
@@ -1014,11 +1014,11 @@ void saveSchedules()
         logError("Failed to open schedules.json for writing.");
         return;
     }
-    StaticJsonDocument<512> doc;
+    JsonDocument doc;
     JsonArray arr = doc.to<JsonArray>();
     for (int i = 0; i < dailyScheduleCount; i++)
     {
-        JsonObject obj = arr.createNestedObject();
+        JsonObject obj = arr.add<JsonObject>();
         obj["drum"] = dailySchedules[i].drum;
         obj["hour"] = dailySchedules[i].hour;
         obj["minute"] = dailySchedules[i].minute;
@@ -1242,7 +1242,7 @@ static void appendHistoryItemJson(String &out, const String &timestampRaw, const
         event = message;
     }
 
-    StaticJsonDocument<256> itemDoc;
+    JsonDocument itemDoc;
     itemDoc["timestamp"] = isoTs;
     itemDoc["event"] = event;
     if (medicine.length() > 0) itemDoc["medicine"] = medicine; else itemDoc["medicine"] = "";
