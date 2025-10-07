@@ -866,6 +866,9 @@ const i18n = {
       warningIcon: "⚠️"
     },
     history: {
+      title: "📋 Medicine History",
+      subtitle: "Complete medication dispensing history",
+      backToMain: "Back to Main",
       error: {
         loadFailedTitle: "Could not load history",
         loadFailedSubtitle: "Failed to connect to the dispenser. Please check the connection.",
@@ -879,21 +882,41 @@ const i18n = {
         subtitle: "History will appear here once the dispenser starts operating.",
         noMatch: "No records match your filters"
       },
-      table: {
-        headers: {
-          datetime: "Date & Time",
-          event: "Event",
-          medicine: "Medicine",
-          drum: "Drum",
-          slot: "Slot",
-          details: "Details"
-        }
-      },
       filters: {
+        title: "Filters & Options",
+        timePeriod: "📅 Time Period",
+        eventType: "🎯 Event Type",
+        fromDate: "📅 From Date",
+        toDate: "📅 To Date",
         buttons: {
+          allTime: "All Time",
+          today: "Today",
+          week: "This Week",
+          month: "This Month",
+          allEvents: "All Events",
           taken: "Taken",
           missed: "Missed",
           dispensed: "Dispensed"
+        }
+      },
+      stats: {
+        totalEvents: "Total Events",
+        medicinesTaken: "Medicines Taken",
+        dosesMissed: "Doses Missed",
+        autoDispensed: "Auto Dispensed"
+      },
+      table: {
+        title: "Complete History",
+        exportCsv: "📥 Export CSV",
+        drumPrefix: "Drum",
+        slotPrefix: "Slot",
+        headers: {
+          datetime: "📅 Date & Time",
+          event: "📊 Event",
+          medicine: "💊 Medicine",
+          drum: "🥁 Drum",
+          slot: "🎯 Slot",
+          details: "📝 Details"
         }
       }
     }
@@ -1023,6 +1046,9 @@ const i18n = {
       warningIcon: "⚠️"
     },
     history: {
+      title: "📋 سجل الأدوية",
+      subtitle: "سجل صرف الأدوية الكامل",
+      backToMain: "العودة للرئيسية",
       error: {
         loadFailedTitle: "تعذر تحميل السجل",
         loadFailedSubtitle: "فشل الاتصال بجهاز الصرف. يرجى التحقق من الاتصال.",
@@ -1036,21 +1062,41 @@ const i18n = {
         subtitle: "سيظهر السجل هنا بمجرد بدء عمل جهاز الصرف.",
         noMatch: "لا توجد سجلات مطابقة لمرشحاتك"
       },
-      table: {
-        headers: {
-          datetime: "التاريخ والوقت",
-          event: "الحدث",
-          medicine: "الدواء",
-          drum: "الأسطوانة",
-          slot: "الفتحة",
-          details: "التفاصيل"
-        }
-      },
       filters: {
+        title: "المرشحات والخيارات",
+        timePeriod: "📅 الفترة الزمنية",
+        eventType: "🎯 نوع الحدث",
+        fromDate: "📅 من تاريخ",
+        toDate: "📅 إلى تاريخ",
         buttons: {
+          allTime: "كل الأوقات",
+          today: "اليوم",
+          week: "هذا الأسبوع",
+          month: "هذا الشهر",
+          allEvents: "كل الأحداث",
           taken: "تم تناوله",
           missed: "فائت",
           dispensed: "تم صرفه"
+        }
+      },
+      stats: {
+        totalEvents: "إجمالي الأحداث",
+        medicinesTaken: "الأدوية المتناولة",
+        dosesMissed: "الجرعات الفائتة",
+        autoDispensed: "الصرف التلقائي"
+      },
+      table: {
+        title: "السجل الكامل",
+        exportCsv: "📥 تصدير CSV",
+        drumPrefix: "الأسطوانة",
+        slotPrefix: "الفتحة",
+        headers: {
+          datetime: "📅 التاريخ والوقت",
+          event: "📊 الحدث",
+          medicine: "💊 الدواء",
+          drum: "🥁 الأسطوانة",
+          slot: "🎯 الفتحة",
+          details: "📝 التفاصيل"
         }
       }
     }
