@@ -390,7 +390,44 @@ async function refreshLastAction() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     if (statusEl) {
-      const ts = data.timestamp ? new Date(String(data.timestamp).replace(' ', 'T')).toLocaleString() : '';
+      let ts = '';
+      if (data.timestamp) {
+        try {
+          // Try multiple date parsing approaches
+          let dateObj;
+          const timestampStr = String(data.timestamp);
+          
+          // First try: direct parsing
+          dateObj = new Date(timestampStr);
+          
+          // If invalid, try with space replaced by T
+          if (isNaN(dateObj.getTime())) {
+            dateObj = new Date(timestampStr.replace(' ', 'T'));
+          }
+          
+          // If still invalid, try parsing as ISO format
+          if (isNaN(dateObj.getTime())) {
+            dateObj = new Date(timestampStr + 'Z');
+          }
+          
+          // If still invalid, try manual parsing for common formats
+          if (isNaN(dateObj.getTime())) {
+            // Try format: YYYY-MM-DD HH:mm:ss
+            const match = timestampStr.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
+            if (match) {
+              dateObj = new Date(match[1], match[2] - 1, match[3], match[4], match[5], match[6]);
+            }
+          }
+          
+          // Only use the date if it's valid
+          if (!isNaN(dateObj.getTime())) {
+            ts = dateObj.toLocaleString();
+          }
+        } catch (dateError) {
+          console.warn('Date parsing error:', dateError, 'for timestamp:', data.timestamp);
+        }
+      }
+      
       const ev = data.event || '';
       statusEl.textContent = ts && ev ? `${ts} — ${ev}` : ev || ts || '';
     }
@@ -635,9 +672,16 @@ async function loadAndDisplayMedicines() {
     try { refreshUpcomingSchedules(); } catch (_) {}
   } catch (error) {
     console.error('Error fetching medication status:', error);
-    const errText = (i18n[currentLang]?.medicine?.errorLoadingData) || 'Error loading data.';
-    document.getElementById('medicinesList1').innerHTML = `<div class="empty-list" style="color: red;">${errText}</div>`;
-    document.getElementById('medicinesList2').innerHTML = `<div class="empty-list" style="color: red;">${errText}</div>`;
+    
+    // Check if medicine list elements exist on current page
+    const medicinesList1El = document.getElementById('medicinesList1');
+    const medicinesList2El = document.getElementById('medicinesList2');
+    
+    if (medicinesList1El && medicinesList2El) {
+      const errText = (i18n[currentLang]?.medicine?.errorLoadingData) || 'Error loading data.';
+      medicinesList1El.innerHTML = `<div class="empty-list" style="color: red;">${errText}</div>`;
+      medicinesList2El.innerHTML = `<div class="empty-list" style="color: red;">${errText}</div>`;
+    }
   }
 }
 
@@ -645,22 +689,34 @@ async function loadAndDisplayMedicines() {
 async function refreshStatus() {
   if (statusLoading) return;
   statusLoading = true;
+  
+  // Check if status elements exist on current page
+  const currentTimeEl = document.getElementById('currentTime');
+  const drum1StatusEl = document.getElementById('drum1Status');
+  const drum2StatusEl = document.getElementById('drum2Status');
+  const wifiStatusEl = document.getElementById('wifiStatus');
+  
+  if (!currentTimeEl || !drum1StatusEl || !drum2StatusEl || !wifiStatusEl) {
+    statusLoading = false;
+    return; // Skip if elements don't exist on current page
+  }
+  
   try {
     const res = await fetch('/status');
     if (!res.ok) {
       throw new Error(`HTTP error ${res.status}`);
     }
     const data = await res.json();
-    document.getElementById('currentTime').textContent = data.time;
-    document.getElementById('drum1Status').textContent = `Slot ${data.slotDrum1}`;
-    document.getElementById('drum2Status').textContent = `Slot ${data.slotDrum2}`;
-    document.getElementById('wifiStatus').textContent = data.wifi;
+    currentTimeEl.textContent = data.time;
+    drum1StatusEl.textContent = `Slot ${data.slotDrum1}`;
+    drum2StatusEl.textContent = `Slot ${data.slotDrum2}`;
+    wifiStatusEl.textContent = data.wifi;
   } catch (error) {
     console.error('Error refreshing status:', error);
-    document.getElementById('currentTime').textContent = (i18n[currentLang]?.dashboard?.errorText) || 'Error';
-    document.getElementById('drum1Status').textContent = (i18n[currentLang]?.dashboard?.errorText) || 'Error';
-    document.getElementById('drum2Status').textContent = (i18n[currentLang]?.dashboard?.errorText) || 'Error';
-    document.getElementById('wifiStatus').textContent = (i18n[currentLang]?.dashboard?.offlineText) || 'Offline';
+    currentTimeEl.textContent = (i18n[currentLang]?.dashboard?.errorText) || 'Error';
+    drum1StatusEl.textContent = (i18n[currentLang]?.dashboard?.errorText) || 'Error';
+    drum2StatusEl.textContent = (i18n[currentLang]?.dashboard?.errorText) || 'Error';
+    wifiStatusEl.textContent = (i18n[currentLang]?.dashboard?.offlineText) || 'Offline';
   } finally {
     statusLoading = false;
   }
@@ -812,7 +868,8 @@ const i18n = {
     history: {
       error: {
         loadFailedTitle: "Could not load history",
-        loadFailedSubtitle: "Failed to connect to the dispenser. Please check the connection."
+        loadFailedSubtitle: "Failed to connect to the dispenser. Please check the connection.",
+        noDataToExport: "No data to export"
       },
       loading: {
         loadingData: "Loading history data..."
@@ -821,6 +878,23 @@ const i18n = {
         title: "No history records found",
         subtitle: "History will appear here once the dispenser starts operating.",
         noMatch: "No records match your filters"
+      },
+      table: {
+        headers: {
+          datetime: "Date & Time",
+          event: "Event",
+          medicine: "Medicine",
+          drum: "Drum",
+          slot: "Slot",
+          details: "Details"
+        }
+      },
+      filters: {
+        buttons: {
+          taken: "Taken",
+          missed: "Missed",
+          dispensed: "Dispensed"
+        }
       }
     }
   },
@@ -951,7 +1025,8 @@ const i18n = {
     history: {
       error: {
         loadFailedTitle: "تعذر تحميل السجل",
-        loadFailedSubtitle: "فشل الاتصال بجهاز الصرف. يرجى التحقق من الاتصال."
+        loadFailedSubtitle: "فشل الاتصال بجهاز الصرف. يرجى التحقق من الاتصال.",
+        noDataToExport: "لا توجد بيانات للتصدير"
       },
       loading: {
         loadingData: "جارٍ تحميل بيانات السجل..."
@@ -960,6 +1035,23 @@ const i18n = {
         title: "لا توجد سجلات في السجل",
         subtitle: "سيظهر السجل هنا بمجرد بدء عمل جهاز الصرف.",
         noMatch: "لا توجد سجلات مطابقة لمرشحاتك"
+      },
+      table: {
+        headers: {
+          datetime: "التاريخ والوقت",
+          event: "الحدث",
+          medicine: "الدواء",
+          drum: "الأسطوانة",
+          slot: "الفتحة",
+          details: "التفاصيل"
+        }
+      },
+      filters: {
+        buttons: {
+          taken: "تم تناوله",
+          missed: "فائت",
+          dispensed: "تم صرفه"
+        }
       }
     }
   }
