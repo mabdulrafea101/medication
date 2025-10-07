@@ -687,7 +687,8 @@ if (!window.__appIntervalsInitialized) {
 const i18n = {
   en: {
     app: {
-      title: "💊 Medicine Dispenser"
+      title: "💊 Medicine Dispenser",
+      subtitle: "Smart medication management system"
     },
     tabs: {
       dashboard: "📊 Dashboard",
@@ -800,11 +801,6 @@ const i18n = {
       manualDispenseDrum1Tooltip: "Manually dispense from Drum 1",
       manualDispenseDrum2Tooltip: "Manually dispense from Drum 2"
     },
-    schedule: {
-      emptyList: "No schedules added yet.",
-      noUpcomingSchedules: "No upcoming schedules found.",
-      errorLoadingSchedules: "Error loading schedules."
-    },
     modeConflict: {
       warning: "Mode Conflict:",
       manualDispensing: "Manual Dispensing",
@@ -830,7 +826,8 @@ const i18n = {
   },
   ar: {
     app: {
-      title: "💊 موزع الأدوية"
+      title: "💊 موزع الأدوية",
+      subtitle: "نظام إدارة الأدوية الذكي"
     },
     tabs: {
       dashboard: "📊 لوحة التحكم",
@@ -943,11 +940,6 @@ const i18n = {
       manualDispenseDrum1Tooltip: "صرف يدوي من الأسطوانة 1",
       manualDispenseDrum2Tooltip: "صرف يدوي من الأسطوانة 2"
     },
-    schedule: {
-      emptyList: "لم تتم إضافة مواعيد بعد.",
-      noUpcomingSchedules: "لا توجد مواعيد قادمة.",
-      errorLoadingSchedules: "خطأ في تحميل المواعيد."
-    },
     modeConflict: {
       warning: "تعارض في الوضع:",
       manualDispensing: "الصرف اليدوي",
@@ -983,6 +975,9 @@ let isRTL = localStorage.getItem(RTL_KEY) === 'true';
 function initializeApp() {
   if (window.__appInitialized) return;
   window.__appInitialized = true;
+
+  // Apply language translations on page load
+  applyLanguage(currentLang);
 
   try { refreshStatus(); } catch (_) {}
   try { refreshLogs(); } catch (_) {}
