@@ -454,15 +454,17 @@ select {
     appearance: none;
 }
 
+/* Time and datetime inputs - minimal styling for native functionality */
 input[type="time"],
 input[type="datetime-local"] {
-    padding: 1rem;
-    font-size: 1rem;
     border: 2px solid #e0e0e0;
-    border-radius: 12px;
-    background: white;
-    transition: all 0.3s ease;
-    font-family: inherit;
+    padding: 0.5rem;
+    font-size: 1rem;
+    width: 100%;
+    box-sizing: border-box;
+    /* Override general input appearance: none */
+    -webkit-appearance: auto !important;
+    appearance: auto !important;
 }
 
 input:focus,
@@ -473,9 +475,7 @@ select:focus {
 }
 
 /* Ensure native calendar/time pickers are visible */
-input[type="date"],
-input[type="time"],
-input[type="datetime-local"] {
+input[type="date"] {
     -webkit-appearance: auto;
     appearance: auto;
 }
